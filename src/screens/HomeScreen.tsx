@@ -1,11 +1,9 @@
-// src/screens/HomeScreen.tsx
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, FlatList, ActivityIndicator, Button } from 'react-native';
-import { supabase } from '../services/supabase';
-import { Aliment } from '../types/nutrition';
+import React, { useContext } from 'react';
+import { StyleSheet, Text, View, FlatList, Button, TouchableOpacity } from 'react-native';
+import { MealContext } from '../context/MealContext';
+import { calculerTotauxRepas, calculerValeursPortion } from '../utils/nutrition';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-// On définit le typage pour la navigation (on ajoutera d'autres écrans plus tard)
 type RootStackParamList = {
   Home: undefined;
   Search: undefined;
@@ -16,47 +14,87 @@ type Props = {
 };
 
 export default function HomeScreen({ navigation }: Props) {
-  const [aliments, setAliments] = useState<Aliment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { portions, removePortion } = useContext(MealContext);
 
-  useEffect(() => {
-    async function fetchAliments() {
-      const { data, error } = await supabase.from('aliments').select('*');
-      if (!error) setAliments(data || []);
-      setLoading(false);
-    }
-    fetchAliments();
-  }, []);
+  // Calcul dynamique des totaux du repas
+  const totaux = calculerTotauxRepas(portions);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Mon Planning</Text>
-        <Button title="Ajouter un repas" onPress={() => navigation.navigate('Search')} />
+        <Text style={styles.title}>Mon Repas</Text>
+        <Button title="+ Ajouter" onPress={() => navigation.navigate('Search')} />
       </View>
 
-      {loading ? (
-        <ActivityIndicator size="large" color="#0000ff" />
-      ) : (
-        <FlatList
-          data={aliments}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.name}>{item.nom} (Nutri-Score {item.nutriscore})</Text>
-              <Text>{item.calories} kcal | P: {item.proteines}g | G: {item.glucides}g | L: {item.lipides}g</Text>
+      {/* Résumé nutritionnel du repas */}
+      <View style={styles.summaryCard}>
+        <Text style={styles.summaryTitle}>Bilan Nutritionnel</Text>
+        <Text style={styles.caloriesText}>{totaux.calories} kcal</Text>
+        <View style={styles.macrosRow}>
+          <Text style={styles.macro}>Prot : {totaux.proteines} g</Text>
+          <Text style={styles.macro}>Gluc : {totaux.glucides} g</Text>
+          <Text style={styles.macro}>Lip : {totaux.lipides} g</Text>
+        </View>
+      </View>
+
+      {/* Liste des aliments du repas */}
+      <Text style={styles.subtitle}>Aliments ajoutés ({portions.length})</Text>
+      
+      <FlatList
+        data={portions}
+        keyExtractor={(_, index) => index.toString()}
+        renderItem={({ item, index }) => {
+          const vals = calculerValeursPortion(item.aliment, item.quantiteEnGrams);
+          return (
+            <View style={styles.itemCard}>
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>
+                  {item.aliment.nom} ({item.quantiteEnGrams} g)
+                </Text>
+                <Text style={styles.itemDetails}>
+                  {vals.calories} kcal | P: {vals.proteines}g | G: {vals.glucides}g | L: {vals.lipides}g
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => removePortion(index)}>
+                <Text style={styles.deleteButton}>Supprimer</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        />
-      )}
+          );
+        }}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            Aucun aliment dans ce repas. Clique sur "+ Ajouter" pour commencer.
+          </Text>
+        }
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  title: { fontSize: 22, fontWeight: 'bold' },
-  card: { padding: 12, marginBottom: 10, borderWidth: 1, borderColor: '#ddd', borderRadius: 8 },
-  name: { fontWeight: '600', marginBottom: 4 },
+  container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  title: { fontSize: 24, fontWeight: 'bold' },
+  summaryCard: { backgroundColor: '#4CAF50', padding: 16, borderRadius: 12, marginBottom: 20 },
+  summaryTitle: { color: '#fff', fontSize: 14, opacity: 0.9 },
+  caloriesText: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginVertical: 4 },
+  macrosRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  macro: { color: '#fff', fontSize: 13, fontWeight: '500' },
+  subtitle: { fontSize: 16, fontWeight: '600', marginBottom: 10 },
+  itemCard: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  itemInfo: { flex: 1 },
+  itemName: { fontSize: 15, fontWeight: '600' },
+  itemDetails: { fontSize: 12, color: '#666', marginTop: 2 },
+  deleteButton: { color: '#d32f2f', fontWeight: 'bold', marginLeft: 10 },
+  emptyText: { textAlign: 'center', color: '#888', marginTop: 30 },
 });
