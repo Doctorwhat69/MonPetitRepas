@@ -4,10 +4,12 @@ import { MealContext } from '../context/MealContext';
 import { calculerTotauxRepas, calculerValeursPortion, calculerNutriscoreMoyen } from '../utils/nutrition';
 import NutriScoreBadge from '../components/NutriScoreBadge';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { supabase } from '../services/supabase';
 
 type RootStackParamList = {
   Home: undefined;
   Search: undefined;
+  History: undefined;
 };
 
 type Props = {
@@ -15,35 +17,57 @@ type Props = {
 };
 
 export default function HomeScreen({ navigation }: Props) {
-  const { portions, removePortion } = useContext(MealContext);
+  // 2. Extraction de clearMeal depuis le contexte
+  const { portions, removePortion, clearMeal } = useContext(MealContext);
 
-  // Calcul dynamique des totaux du repas
   const totaux = calculerTotauxRepas(portions);
-const nutriScoreGlobal = calculerNutriscoreMoyen(portions);
+  const nutriScoreGlobal = calculerNutriscoreMoyen(portions);
+
+  // 3. Logique d'enregistrement dans Supabase
+  const handleSaveMeal = async () => {
+    if (portions.length === 0) return;
+
+    const { error } = await supabase.from('repas').insert([
+      {
+        total_calories: totaux.calories,
+        total_proteines: totaux.proteines,
+        total_glucides: totaux.glucides,
+        total_lipides: totaux.lipides,
+        nutriscore: nutriScoreGlobal,
+      },
+    ]);
+
+    if (!error) {
+      alert('Repas enregistré avec succès !');
+      clearMeal();
+    } else {
+      alert("Erreur lors de l'enregistrement");
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Mon Repas</Text>
+        <Button title="Historique" onPress={() => navigation.navigate('History')} />
         <Button title="+ Ajouter" onPress={() => navigation.navigate('Search')} />
       </View>
 
-      {/* Résumé nutritionnel du repas */}
       <View style={styles.summaryCard}>
-     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-       <Text style={styles.summaryTitle}>Bilan Nutritionnel</Text>
-       <NutriScoreBadge score={nutriScoreGlobal} />
-     </View>
-     <Text style={styles.caloriesText}>{totaux.calories} kcal</Text>
-     <View style={styles.macrosRow}>
-       <Text style={styles.macro}>Prot : {totaux.proteines} g</Text>
-       <Text style={styles.macro}>Gluc : {totaux.glucides} g</Text>
-       <Text style={styles.macro}>Lip : {totaux.lipides} g</Text>
-     </View>
-   </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.summaryTitle}>Bilan Nutritionnel</Text>
+          <NutriScoreBadge score={nutriScoreGlobal} />
+        </View>
+        <Text style={styles.caloriesText}>{totaux.calories} kcal</Text>
+        <View style={styles.macrosRow}>
+          <Text style={styles.macro}>Prot : {totaux.proteines} g</Text>
+          <Text style={styles.macro}>Gluc : {totaux.glucides} g</Text>
+          <Text style={styles.macro}>Lip : {totaux.lipides} g</Text>
+        </View>
+      </View>
 
-      {/* Liste des aliments du repas */}
       <Text style={styles.subtitle}>Aliments ajoutés ({portions.length})</Text>
-      
+
       <FlatList
         data={portions}
         keyExtractor={(_, index) => index.toString()}
@@ -71,6 +95,15 @@ const nutriScoreGlobal = calculerNutriscoreMoyen(portions);
           </Text>
         }
       />
+
+      {/* 4. Bouton d'enregistrement sous la liste */}
+      <View style={styles.saveButtonContainer}>
+        <Button
+          title="Enregistrer le repas"
+          onPress={handleSaveMeal}
+          disabled={portions.length === 0}
+        />
+      </View>
     </View>
   );
 }
@@ -101,4 +134,5 @@ const styles = StyleSheet.create({
   itemDetails: { fontSize: 12, color: '#666', marginTop: 2 },
   deleteButton: { color: '#d32f2f', fontWeight: 'bold', marginLeft: 10 },
   emptyText: { textAlign: 'center', color: '#888', marginTop: 30 },
+  saveButtonContainer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#e0e0e0' },
 });

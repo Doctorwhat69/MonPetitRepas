@@ -5,12 +5,14 @@ interface MealContextProps {
   portions: PortionAliment[];
   addPortion: (portion: PortionAliment) => void;
   removePortion: (index: number) => void;
+  clearMeal: () => void;
 }
 
 export const MealContext = createContext<MealContextProps>({
   portions: [],
   addPortion: () => {},
   removePortion: () => {},
+  clearMeal: () => {},
 });
 
 export const MealProvider = ({ children }: { children: ReactNode }) => {
@@ -24,8 +26,13 @@ export const MealProvider = ({ children }: { children: ReactNode }) => {
     setPortions((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // Vider complètement la liste des aliments
+  const clearMeal = () => {
+    setPortions([]);
+  };
+
   return (
-    <MealContext.Provider value={{ portions, addPortion, removePortion }}>
+    <MealContext.Provider value={{ portions, addPortion, removePortion, clearMeal }}>
       {children}
     </MealContext.Provider>
   );
