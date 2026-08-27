@@ -12,7 +12,7 @@ export interface TotauxNutritionnels {
   lipides: number;
 }
 
-// Calcule les valeurs nutritionnelles réelles selon le poids en grammes
+// 1. Calcule les valeurs nutritionnelles réelles selon le poids en grammes
 export function calculerValeursPortion(aliment: Aliment, quantiteEnGrams: number): TotauxNutritionnels {
   const ratio = quantiteEnGrams / 100;
   return {
@@ -23,7 +23,7 @@ export function calculerValeursPortion(aliment: Aliment, quantiteEnGrams: number
   };
 }
 
-// Calcule le total pour une liste de portions
+// 2. Calcule le total pour une liste de portions
 export function calculerTotauxRepas(portions: PortionAliment[]): TotauxNutritionnels {
   return portions.reduce(
     (acc, item) => {
@@ -37,4 +37,33 @@ export function calculerTotauxRepas(portions: PortionAliment[]): TotauxNutrition
     },
     { calories: 0, proteines: 0, glucides: 0, lipides: 0 }
   );
+}
+
+// 3. Calcul dynamique du Nutri-Score
+const nutriScoreToNumber: Record<string, number> = { A: 1, B: 2, C: 3, D: 4, E: 5 };
+const numberToNutriScore: Record<number, string> = { 1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E' };
+
+export function calculerNutriscoreMoyen(portions: PortionAliment[]): string {
+  if (portions.length === 0) return '-';
+
+  let totalPoints = 0;
+  let totalPoids = 0;
+
+  portions.forEach((portion) => {
+    const points = nutriScoreToNumber[portion.aliment.nutriscore];
+    if (points) {
+      totalPoints += points * portion.quantiteEnGrams;
+      totalPoids += portion.quantiteEnGrams;
+    }
+  });
+
+  if (totalPoids === 0) return '-';
+
+  // On calcule la moyenne et on arrondit à l'entier le plus proche
+  const moyenne = Math.round(totalPoints / totalPoids);
+  
+  // On s'assure que le résultat reste entre 1 et 5
+  const index = Math.max(1, Math.min(5, moyenne));
+
+  return numberToNutriScore[index];
 }

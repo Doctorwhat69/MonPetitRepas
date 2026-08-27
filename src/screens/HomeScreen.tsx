@@ -1,7 +1,8 @@
 import React, { useContext } from 'react';
 import { StyleSheet, Text, View, FlatList, Button, TouchableOpacity } from 'react-native';
 import { MealContext } from '../context/MealContext';
-import { calculerTotauxRepas, calculerValeursPortion } from '../utils/nutrition';
+import { calculerTotauxRepas, calculerValeursPortion, calculerNutriscoreMoyen } from '../utils/nutrition';
+import NutriScoreBadge from '../components/NutriScoreBadge';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 type RootStackParamList = {
@@ -18,7 +19,7 @@ export default function HomeScreen({ navigation }: Props) {
 
   // Calcul dynamique des totaux du repas
   const totaux = calculerTotauxRepas(portions);
-
+const nutriScoreGlobal = calculerNutriscoreMoyen(portions);
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -28,14 +29,17 @@ export default function HomeScreen({ navigation }: Props) {
 
       {/* Résumé nutritionnel du repas */}
       <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Bilan Nutritionnel</Text>
-        <Text style={styles.caloriesText}>{totaux.calories} kcal</Text>
-        <View style={styles.macrosRow}>
-          <Text style={styles.macro}>Prot : {totaux.proteines} g</Text>
-          <Text style={styles.macro}>Gluc : {totaux.glucides} g</Text>
-          <Text style={styles.macro}>Lip : {totaux.lipides} g</Text>
-        </View>
-      </View>
+     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+       <Text style={styles.summaryTitle}>Bilan Nutritionnel</Text>
+       <NutriScoreBadge score={nutriScoreGlobal} />
+     </View>
+     <Text style={styles.caloriesText}>{totaux.calories} kcal</Text>
+     <View style={styles.macrosRow}>
+       <Text style={styles.macro}>Prot : {totaux.proteines} g</Text>
+       <Text style={styles.macro}>Gluc : {totaux.glucides} g</Text>
+       <Text style={styles.macro}>Lip : {totaux.lipides} g</Text>
+     </View>
+   </View>
 
       {/* Liste des aliments du repas */}
       <Text style={styles.subtitle}>Aliments ajoutés ({portions.length})</Text>
