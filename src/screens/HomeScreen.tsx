@@ -19,11 +19,13 @@ type Props = {
 export default function HomeScreen({ navigation }: Props) {
   // 2. Extraction de clearMeal depuis le contexte
   const { portions, removePortion, clearMeal } = useContext(MealContext);
-
   const totaux = calculerTotauxRepas(portions);
   const nutriScoreGlobal = calculerNutriscoreMoyen(portions);
 
   // 3. Logique d'enregistrement dans Supabase
+  const handleSignOut = async () => {
+  await supabase.auth.signOut();
+};
   const handleSaveMeal = async () => {
     if (portions.length === 0) return;
 
@@ -51,6 +53,7 @@ export default function HomeScreen({ navigation }: Props) {
         <Text style={styles.title}>Mon Repas</Text>
         <Button title="Historique" onPress={() => navigation.navigate('History')} />
         <Button title="+ Ajouter" onPress={() => navigation.navigate('Search')} />
+          <Button title="Déconnexion" color="#d32f2f" onPress={handleSignOut} />
       </View>
 
       <View style={styles.summaryCard}>
