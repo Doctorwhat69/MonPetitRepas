@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, Button, TouchableOpacity } from 'react-native';
 import { MealContext } from '../context/MealContext';
 import { calculerTotauxRepas, calculerValeursPortion, calculerNutriscoreMoyen } from '../utils/nutrition';
@@ -6,15 +6,38 @@ import NutriScoreBadge from '../components/NutriScoreBadge';
 import { supabase } from '../services/supabase';
 import SearchModal from '../components/SearchModal';
 import HistoryModal from '../components/HistoryModal';
+import ProfileModal from '../components/ProfileModal';
 
 export default function HomeScreen() {
   const { portions, removePortion, clearMeal } = useContext(MealContext);
 
   const [searchVisible, setSearchVisible] = useState(false);
   const [historyVisible, setHistoryVisible] = useState(false);
+  const [profileVisible, setProfileVisible] = useState(false);
+
+  const [objectifCalories, setObjectifCalories] = useState(2000);
 
   const totaux = calculerTotauxRepas(portions);
   const nutriScoreGlobal = calculerNutriscoreMoyen(portions);
+
+  useEffect(() => {
+    chargerProfil();
+  }, []);
+
+  const chargerProfil = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data } = await supabase
+        .from('profils')
+        .select('objectif_calories')
+        .eq('user_id', user.id)
+        .single();
+
+      if (data) {
+        setObjectifCalories(data.objectif_calories);
+      }
+    }
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -41,25 +64,38 @@ export default function HomeScreen() {
     }
   };
 
+  // Calcul du pourcentage pour la barre de progression
+  const pourcentage = Math.min(Math.round((totaux.calories / objectifCalories) * 100), 100);
+
   return (
     <View style={styles.container}>
       {/* En-tête principal */}
       <View style={styles.header}>
         <Text style={styles.title}>Mon Repas</Text>
         <View style={styles.headerButtons}>
+          <Button title="Profil" onPress={() => setProfileVisible(true)} color="#007AFF" />
           <Button title="Historique" onPress={() => setHistoryVisible(true)} />
           <Button title="+ Ajouter" onPress={() => setSearchVisible(true)} />
           <Button title="Déconnexion" color="#d32f2f" onPress={handleSignOut} />
         </View>
       </View>
 
-      {/* Résumé nutritionnel */}
+      {/* Résumé nutritionnel avec Jauge */}
       <View style={styles.summaryCard}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.summaryTitle}>Bilan Nutritionnel</Text>
           <NutriScoreBadge score={nutriScoreGlobal} />
         </View>
-        <Text style={styles.caloriesText}>{totaux.calories} kcal</Text>
+
+        <Text style={styles.caloriesText}>
+          {totaux.calories} / {objectifCalories} kcal
+        </Text>
+
+        {/* Barre de progression */}
+        <View style={styles.progressBackground}>
+          <View style={[styles.progressBar, { width: `${pourcentage}%` }]} />
+        </View>
+
         <View style={styles.macrosRow}>
           <Text style={styles.macro}>Prot : {totaux.proteines} g</Text>
           <Text style={styles.macro}>Gluc : {totaux.glucides} g</Text>
@@ -110,6 +146,11 @@ export default function HomeScreen() {
       {/* Fenêtres modales */}
       <SearchModal visible={searchVisible} onClose={() => setSearchVisible(false)} />
       <HistoryModal visible={historyVisible} onClose={() => setHistoryVisible(false)} />
+      <ProfileModal
+        visible={profileVisible}
+        onClose={() => setProfileVisible(false)}
+        onProfileUpdated={(nouveauGoal) => setObjectifCalories(nouveauGoal)}
+      />
     </View>
   );
 }
@@ -118,24 +159,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5', paddingTop: 40 },
   header: { marginBottom: 16 },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
-  headerButtons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  headerButtons: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   summaryCard: { backgroundColor: '#4CAF50', padding: 16, borderRadius: 12, marginBottom: 20 },
   summaryTitle: { color: '#fff', fontSize: 14, opacity: 0.9 },
-  caloriesText: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginVertical: 4 },
-  macrosRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  caloriesText: { color: '#fff', fontSize: 26, fontWeight: 'bold', marginVertical: 4 },
+  progressBackground: { height: 10, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 5, overflow: 'hidden', marginVertical: 8 },
+  progressBar: { height: '100%', backgroundColor: '#fff', borderRadius: 5 },
+  macrosRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   macro: { color: '#fff', fontSize: 13, fontWeight: '500' },
   subtitle: { fontSize: 16, fontWeight: '600', marginBottom: 10 },
-  itemCard: {
-    backgroundColor: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
+  itemCard: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0e0e0' },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 15, fontWeight: '600' },
   itemDetails: { fontSize: 12, color: '#666', marginTop: 2 },

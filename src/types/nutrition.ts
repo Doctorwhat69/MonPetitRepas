@@ -9,3 +9,9 @@ export interface Aliment {
   lipides: number;
   nutriscore: string;
 }
+
+export interface Profil {
+  id?: string;
+  user_id?: string;
+  objectif_calories: number;
+}
