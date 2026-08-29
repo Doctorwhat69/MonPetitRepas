@@ -1,31 +1,25 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { StyleSheet, Text, View, FlatList, Button, TouchableOpacity } from 'react-native';
 import { MealContext } from '../context/MealContext';
 import { calculerTotauxRepas, calculerValeursPortion, calculerNutriscoreMoyen } from '../utils/nutrition';
 import NutriScoreBadge from '../components/NutriScoreBadge';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../services/supabase';
+import SearchModal from '../components/SearchModal';
+import HistoryModal from '../components/HistoryModal';
 
-type RootStackParamList = {
-  Home: undefined;
-  Search: undefined;
-  History: undefined;
-};
-
-type Props = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'Home'>;
-};
-
-export default function HomeScreen({ navigation }: Props) {
-  // 2. Extraction de clearMeal depuis le contexte
+export default function HomeScreen() {
   const { portions, removePortion, clearMeal } = useContext(MealContext);
+
+  const [searchVisible, setSearchVisible] = useState(false);
+  const [historyVisible, setHistoryVisible] = useState(false);
+
   const totaux = calculerTotauxRepas(portions);
   const nutriScoreGlobal = calculerNutriscoreMoyen(portions);
 
-  // 3. Logique d'enregistrement dans Supabase
   const handleSignOut = async () => {
-  await supabase.auth.signOut();
-};
+    await supabase.auth.signOut();
+  };
+
   const handleSaveMeal = async () => {
     if (portions.length === 0) return;
 
@@ -49,13 +43,17 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
+      {/* En-tête principal */}
       <View style={styles.header}>
         <Text style={styles.title}>Mon Repas</Text>
-        <Button title="Historique" onPress={() => navigation.navigate('History')} />
-        <Button title="+ Ajouter" onPress={() => navigation.navigate('Search')} />
+        <View style={styles.headerButtons}>
+          <Button title="Historique" onPress={() => setHistoryVisible(true)} />
+          <Button title="+ Ajouter" onPress={() => setSearchVisible(true)} />
           <Button title="Déconnexion" color="#d32f2f" onPress={handleSignOut} />
+        </View>
       </View>
 
+      {/* Résumé nutritionnel */}
       <View style={styles.summaryCard}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={styles.summaryTitle}>Bilan Nutritionnel</Text>
@@ -69,6 +67,7 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       </View>
 
+      {/* Liste des aliments du repas */}
       <Text style={styles.subtitle}>Aliments ajoutés ({portions.length})</Text>
 
       <FlatList
@@ -99,7 +98,7 @@ export default function HomeScreen({ navigation }: Props) {
         }
       />
 
-      {/* 4. Bouton d'enregistrement sous la liste */}
+      {/* Bouton d'enregistrement */}
       <View style={styles.saveButtonContainer}>
         <Button
           title="Enregistrer le repas"
@@ -107,14 +106,19 @@ export default function HomeScreen({ navigation }: Props) {
           disabled={portions.length === 0}
         />
       </View>
+
+      {/* Fenêtres modales */}
+      <SearchModal visible={searchVisible} onClose={() => setSearchVisible(false)} />
+      <HistoryModal visible={historyVisible} onClose={() => setHistoryVisible(false)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: 'bold' },
+  container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5', paddingTop: 40 },
+  header: { marginBottom: 16 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
+  headerButtons: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   summaryCard: { backgroundColor: '#4CAF50', padding: 16, borderRadius: 12, marginBottom: 20 },
   summaryTitle: { color: '#fff', fontSize: 14, opacity: 0.9 },
   caloriesText: { color: '#fff', fontSize: 28, fontWeight: 'bold', marginVertical: 4 },
