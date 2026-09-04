@@ -1,178 +1,155 @@
-import React, { useContext, useState, useEffect } from 'react';
-import { StyleSheet, Text, View, FlatList, Button, TouchableOpacity } from 'react-native';
-import { MealContext } from '../context/MealContext';
-import { calculerTotauxRepas, calculerValeursPortion, calculerNutriscoreMoyen } from '../utils/nutrition';
-import NutriScoreBadge from '../components/NutriScoreBadge';
-import { supabase } from '../services/supabase';
-import SearchModal from '../components/SearchModal';
-import HistoryModal from '../components/HistoryModal';
+import React, { useState, useContext } from 'react';
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { ThemeContext } from '../context/ThemeContext';
+import { getGlobalStyles } from '../styles/globalStyles';
 import ProfileModal from '../components/ProfileModal';
+import SearchFoodModal from '../components/SearchFoodModal';
+import { useJournal, useSupprimerConsommation } from '../hooks/useJournal';
+import WeeklyCalendar from '../components/WeeklyCalendar';
+
+// Helper pour éviter le décalage UTC
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const SECTIONS = [
+  { key: 'petit_dejeuner', titre: '🌅 Petit-déjeuner' },
+  { key: 'dejeuner', titre: '☀️ Déjeuner' },
+  { key: 'collation', titre: '🍎 Collations' },
+  { key: 'diner', titre: '🌙 Dîner' },
+];
 
 export default function HomeScreen() {
-  const { portions, removePortion, clearMeal } = useContext(MealContext);
+  const { theme } = useContext(ThemeContext);
+  const styles = getGlobalStyles(theme);
 
-  const [searchVisible, setSearchVisible] = useState(false);
-  const [historyVisible, setHistoryVisible] = useState(false);
+  const [dateJournal, setDateJournal] = useState(new Date());
   const [profileVisible, setProfileVisible] = useState(false);
 
-  const [objectifCalories, setObjectifCalories] = useState(2000);
+  const [selectedMoment, setSelectedMoment] = useState<
+  'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation' | null
+>(null);
 
-  const totaux = calculerTotauxRepas(portions);
-  const nutriScoreGlobal = calculerNutriscoreMoyen(portions);
+  // Format YYYY-MM-DD local
+  const dateString = formatLocalDate(dateJournal);
 
-  useEffect(() => {
-    chargerProfil();
-  }, []);
+  const { data: journal = [], isLoading } = useJournal(dateString);
+  const supprimerMutation = useSupprimerConsommation();
 
-  const chargerProfil = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { data } = await supabase
-        .from('profils')
-        .select('objectif_calories')
-        .eq('user_id', user.id)
-        .single();
+  // Comparaison de la date sans l'heure
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const selectedDateNormalized = new Date(dateJournal);
+  selectedDateNormalized.setHours(0, 0, 0, 0);
+  const isFuture = selectedDateNormalized > today;
 
-      if (data) {
-        setObjectifCalories(data.objectif_calories);
-      }
-    }
+  const categoriserJournal = (moment: string) => {
+    return journal.filter((item) => item.moment === moment);
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
-
-  const handleSaveMeal = async () => {
-    if (portions.length === 0) return;
-
-    const { error } = await supabase.from('repas').insert([
-      {
-        total_calories: totaux.calories,
-        total_proteines: totaux.proteines,
-        total_glucides: totaux.glucides,
-        total_lipides: totaux.lipides,
-        nutriscore: nutriScoreGlobal,
-      },
-    ]);
-
-    if (!error) {
-      alert('Repas enregistré avec succès !');
-      clearMeal();
-    } else {
-      alert("Erreur lors de l'enregistrement");
-    }
-  };
-
-  // Calcul du pourcentage pour la barre de progression
-  const pourcentage = Math.min(Math.round((totaux.calories / objectifCalories) * 100), 100);
+  const totalCalories = journal.reduce((acc, item) => acc + Number(item.calories), 0);
+  
+// fonction pour supprimer les elements 
+  const supprimerElement = (id: string) => {
+  console.log("Tentative de suppression, ID:", id, "Date:", dateString);
+  
+  Alert.alert('Supprimer', 'Voulez-vous retirer cet aliment de votre journal ?', [
+    { text: 'Annuler', style: 'cancel' },
+    {
+      text: 'Supprimer',
+      style: 'destructive',
+      onPress: () => supprimerMutation.mutate({ id, date: dateString }),
+    },
+  ]);
+};
 
   return (
     <View style={styles.container}>
-      {/* En-tête principal */}
+      {/* En-tête avec profil */}
       <View style={styles.header}>
-        <Text style={styles.title}>Mon Repas</Text>
-        <View style={styles.headerButtons}>
-          <Button title="Profil" onPress={() => setProfileVisible(true)} color="#007AFF" />
-          <Button title="Historique" onPress={() => setHistoryVisible(true)} />
-          <Button title="+ Ajouter" onPress={() => setSearchVisible(true)} />
-          <Button title="Déconnexion" color="#d32f2f" onPress={handleSignOut} />
-        </View>
+        <Text style={styles.title}>{isFuture ? 'Planification' : 'Mon Journal'}</Text>
+        <TouchableOpacity onPress={() => setProfileVisible(true)} style={styles.chip}>
+          <Text style={styles.chipText}>Profil</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Résumé nutritionnel avec Jauge */}
-      <View style={styles.summaryCard}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={styles.summaryTitle}>Bilan Nutritionnel</Text>
-          <NutriScoreBadge score={nutriScoreGlobal} />
-        </View>
+      <WeeklyCalendar currentDate={dateJournal} onChangeDate={setDateJournal} />
 
-        <Text style={styles.caloriesText}>
-          {totaux.calories} / {objectifCalories} kcal
-        </Text>
-
-        {/* Barre de progression */}
-        <View style={styles.progressBackground}>
-          <View style={[styles.progressBar, { width: `${pourcentage}%` }]} />
-        </View>
-
-        <View style={styles.macrosRow}>
-          <Text style={styles.macro}>Prot : {totaux.proteines} g</Text>
-          <Text style={styles.macro}>Gluc : {totaux.glucides} g</Text>
-          <Text style={styles.macro}>Lip : {totaux.lipides} g</Text>
-        </View>
-      </View>
-
-      {/* Liste des aliments du repas */}
-      <Text style={styles.subtitle}>Aliments ajoutés ({portions.length})</Text>
-
-      <FlatList
-        data={portions}
-        keyExtractor={(_, index) => index.toString()}
-        renderItem={({ item, index }) => {
-          const vals = calculerValeursPortion(item.aliment, item.quantiteEnGrams);
-          return (
-            <View style={styles.itemCard}>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemName}>
-                  {item.aliment.nom} ({item.quantiteEnGrams} g)
-                </Text>
-                <Text style={styles.itemDetails}>
-                  {vals.calories} kcal | P: {vals.proteines}g | G: {vals.glucides}g | L: {vals.lipides}g
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => removePortion(index)}>
-                <Text style={styles.deleteButton}>Supprimer</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            Aucun aliment dans ce repas. Clique sur "+ Ajouter" pour commencer.
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+        {/* Résumé de la journée */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Calories consommées</Text>
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF' }}>
+            {Math.round(totalCalories)} kcal
           </Text>
-        }
-      />
+        </View>
 
-      {/* Bouton d'enregistrement */}
-      <View style={styles.saveButtonContainer}>
-        <Button
-          title="Enregistrer le repas"
-          onPress={handleSaveMeal}
-          disabled={portions.length === 0}
-        />
-      </View>
+        {isLoading ? (
+          <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
+        ) : (
+          SECTIONS.map((section) => {
+            const alimentsDuRepas = categoriserJournal(section.key);
+            const calRepas = alimentsDuRepas.reduce((acc, item) => acc + Number(item.calories), 0);
 
-      {/* Fenêtres modales */}
-      <SearchModal visible={searchVisible} onClose={() => setSearchVisible(false)} />
-      <HistoryModal visible={historyVisible} onClose={() => setHistoryVisible(false)} />
+            return (
+              <View key={section.key} style={{ marginBottom: 20 }}>
+                {/* En-tête de section */}
+                <View style={[styles.rowBetween, { marginBottom: 10 }]}>
+                  <Text style={styles.sectionTitle}>{section.titre}</Text>
+                  <Text style={styles.textSecondary}>{Math.round(calRepas)} kcal</Text>
+                </View>
+
+                {/* Liste des aliments mangés à ce repas */}
+                {alimentsDuRepas.map((aliment) => (
+                  <View key={aliment.id} style={styles.itemCard}>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemName}>{aliment.aliment_nom}</Text>
+                      <Text style={styles.itemDetails}>
+                        {aliment.quantite}g | P: {aliment.proteines}g G: {aliment.glucides}g L: {aliment.lipides}g
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.caloriesText}>{aliment.calories} kcal</Text>
+                      <TouchableOpacity onPress={() => supprimerElement(aliment.id)}>
+                        <Text style={styles.deleteButton}>X</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+
+                {/* Bouton Ajouter pour ce repas */}
+                <TouchableOpacity
+  style={[styles.card, { alignItems: 'center', backgroundColor: 'transparent', borderStyle: 'dashed' }]}
+  onPress={() => setSelectedMoment(section.key as any)}
+>
+  <Text style={{ color: theme.primary, fontWeight: 'bold' }}>+ Ajouter un aliment</Text>
+</TouchableOpacity>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+
       <ProfileModal
         visible={profileVisible}
         onClose={() => setProfileVisible(false)}
-        onProfileUpdated={(nouveauGoal) => setObjectifCalories(nouveauGoal)}
+        onProfileUpdated={(cal) => console.log('Objectif mis à jour :', cal)}
       />
+      <SearchFoodModal
+  visible={selectedMoment !== null}
+  moment={selectedMoment}
+  dateString={dateString}
+  onClose={() => setSelectedMoment(null)}
+/>
     </View>
   );
+  <SearchFoodModal
+  visible={selectedMoment !== null}
+  moment={selectedMoment}
+  dateString={dateString}
+  onClose={() => setSelectedMoment(null)}
+/>
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5', paddingTop: 40 },
-  header: { marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
-  headerButtons: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  summaryCard: { backgroundColor: '#4CAF50', padding: 16, borderRadius: 12, marginBottom: 20 },
-  summaryTitle: { color: '#fff', fontSize: 14, opacity: 0.9 },
-  caloriesText: { color: '#fff', fontSize: 26, fontWeight: 'bold', marginVertical: 4 },
-  progressBackground: { height: 10, backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: 5, overflow: 'hidden', marginVertical: 8 },
-  progressBar: { height: '100%', backgroundColor: '#fff', borderRadius: 5 },
-  macrosRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  macro: { color: '#fff', fontSize: 13, fontWeight: '500' },
-  subtitle: { fontSize: 16, fontWeight: '600', marginBottom: 10 },
-  itemCard: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0e0e0' },
-  itemInfo: { flex: 1 },
-  itemName: { fontSize: 15, fontWeight: '600' },
-  itemDetails: { fontSize: 12, color: '#666', marginTop: 2 },
-  deleteButton: { color: '#d32f2f', fontWeight: 'bold', marginLeft: 10 },
-  emptyText: { textAlign: 'center', color: '#888', marginTop: 30 },
-  saveButtonContainer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#e0e0e0' },
-});

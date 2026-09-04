@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { ThemeContext } from '../context/ThemeContext';
+import { getGlobalStyles } from '../styles/globalStyles'; 
 import {
   Modal,
   View,
@@ -34,6 +36,9 @@ export default function HistoryModal({ visible, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [editingMeal, setEditingMeal] = useState<RepasHistorique | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+const { theme } = useContext(ThemeContext);
+  const styles = getGlobalStyles(theme);
+
 
   useEffect(() => {
     if (visible) chargerHistorique();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   Modal,
   View,
@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { supabase } from '../services/supabase';
 import { calculerBmrEtMacros } from '../utils/bmr';
+import { ThemeContext } from '../context/ThemeContext';
+import { getGlobalStyles } from '../styles/globalStyles'; 
 
 interface Props {
   visible: boolean;
@@ -21,12 +23,13 @@ interface Props {
   onProfileUpdated: (calories: number) => void;
 }
 
-const DEFAULT_AVATAR = 'https://www.noelshack.com/2026-36-2-1788259018-photo-de-profil-par-d-fault.jpg';
+const DEFAULT_AVATAR = require('../../assets/default-avatar.jpg');
 
 export default function ProfileModal({ visible, onClose, onProfileUpdated }: Props) {
   const [loading, setLoading] = useState(false);
   const [modeAuto, setModeAuto] = useState(true);
-
+const { theme, isDarkMode, toggleTheme } = useContext(ThemeContext);
+  const styles = getGlobalStyles(theme);
   // Données physiques
   const [age, setAge] = useState('25');
   const [genre, setGenre] = useState<'homme' | 'femme'>('homme');
@@ -140,15 +143,22 @@ export default function ProfileModal({ visible, onClose, onProfileUpdated }: Pro
         ) : (
           <View style={styles.content}>
             {/* Photo de profil */}
-            <View style={styles.avatarSection}>
-              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-              <TextInput
-                style={styles.inputAvatar}
-                placeholder="Lien d'image d'avatar (URL)..."
-                value={avatarUrl}
-                onChangeText={setAvatarUrl}
-              />
-            </View>
+          <View style={styles.avatarSection}>
+  <Image
+    source={
+      typeof avatarUrl === 'string' && avatarUrl.startsWith('http')
+        ? { uri: avatarUrl }
+        : DEFAULT_AVATAR
+    }
+    style={styles.avatar}
+  />
+  <TextInput
+    style={styles.inputAvatar}
+    placeholder="Lien d'image d'avatar (URL optionnelle)..."
+    value={avatarUrl}
+    onChangeText={setAvatarUrl}
+  />
+</View>
 
             {/* Informations Physiques */}
             <Text style={styles.sectionTitle}>1. Données Personnelles</Text>
@@ -275,7 +285,14 @@ export default function ProfileModal({ visible, onClose, onProfileUpdated }: Pro
                 />
               </View>
             </View>
-
+<View style={styles.themeRow}>
+  <Text style={[styles.label, { color: theme.text }]}>Apparence de l'application :</Text>
+  <TouchableOpacity style={[styles.chip, { backgroundColor: theme.primary }]} onPress={toggleTheme}>
+    <Text style={{ color: '#FFF', fontWeight: 'bold' }}>
+      {isDarkMode ? 'Mode Sombre 🌙' : 'Mode Clair ☀️'}
+    </Text>
+  </TouchableOpacity>
+</View>
             <View style={{ marginTop: 20, marginBottom: 40 }}>
               <Button title="Enregistrer le profil" onPress={Sauvegarder} color="#00BCD4" />
             </View>
@@ -285,33 +302,3 @@ export default function ProfileModal({ visible, onClose, onProfileUpdated }: Pro
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 20, fontWeight: 'bold' },
-  content: { gap: 10 },
-  avatarSection: { alignItems: 'center', marginBottom: 10 },
-  avatar: { width: 80, height: 80, borderRadius: 40, marginBottom: 8, borderWidth: 2, borderColor: '#00BCD4' },
-  inputAvatar: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ccc', borderRadius: 6, padding: 6, fontSize: 12, width: '100%' },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#00838F', marginTop: 10 },
-  row: { flexDirection: 'row', gap: 10, marginVertical: 6 },
-  badge: { flex: 1, padding: 10, borderRadius: 8, backgroundColor: '#e0e0e0', alignItems: 'center' },
-  badgeActive: { backgroundColor: '#00BCD4' },
-  textActive: { color: '#fff', fontWeight: 'bold' },
-  textInactive: { color: '#444' },
-  grid2: { flexDirection: 'row', gap: 10 },
-  grid3: { flexDirection: 'row', gap: 8 },
-  field: { flex: 1 },
-  label: { fontSize: 13, color: '#555', marginBottom: 4 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ccc', borderRadius: 6, padding: 8, fontSize: 15 },
-  wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 6 },
-  chip: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ccc', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  chipActive: { backgroundColor: '#00BCD4', borderColor: '#00BCD4' },
-  chipText: { fontSize: 12, color: '#444' },
-  chipTextActive: { fontSize: 12, color: '#fff', fontWeight: 'bold' },
-  calcHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
-  toggleAuto: { fontSize: 13, color: '#00838F', fontWeight: 'bold' },
-  timeBox: { backgroundColor: '#E0F7FA', padding: 10, borderRadius: 8, flexDirection: 'row', justifyContent: 'space-between', marginVertical: 6 },
-  timeText: { fontSize: 11, color: '#006064', fontWeight: '600' },
-});

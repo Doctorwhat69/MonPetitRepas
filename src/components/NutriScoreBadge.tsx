@@ -1,11 +1,15 @@
-import React from 'react';
+import React,{useContext} from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { ThemeContext } from '../context/ThemeContext';
+import { getGlobalStyles } from '../styles/globalStyles'; 
 
 interface Props {
   score: string;
 }
 
 export default function NutriScoreBadge({ score }: Props) {
+  const { theme } = useContext(ThemeContext);
+  const styles = getGlobalStyles(theme);
   // Définition des couleurs officielles
   const getBackgroundColor = (s: string) => {
     switch (s) {
@@ -24,17 +28,3 @@ export default function NutriScoreBadge({ score }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  text: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 12,
-  },
-});

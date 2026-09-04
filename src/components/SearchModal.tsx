@@ -15,6 +15,8 @@ import { Aliment } from '../types/nutrition';
 import { chercherAlimentsAPI } from '../services/openfoodfacts';
 import NutriScoreBadge from './NutriScoreBadge';
 import { MealContext } from '../context/MealContext';
+import { ThemeContext } from '../context/ThemeContext';
+import { getGlobalStyles } from '../styles/globalStyles'; 
 
 interface Props {
   visible: boolean;
@@ -22,6 +24,8 @@ interface Props {
 }
 
 export default function SearchModal({ visible, onClose }: Props) {
+  const { theme } = useContext(ThemeContext);
+  const styles = getGlobalStyles(theme);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Aliment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -133,24 +137,3 @@ export default function SearchModal({ visible, onClose }: Props) {
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#f5f5f5' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  title: { fontSize: 20, fontWeight: 'bold' },
-  searchBar: { marginBottom: 16 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#ccc', borderRadius: 8, paddingHorizontal: 12, height: 44 },
-  card: { backgroundColor: '#fff', padding: 12, borderRadius: 8, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  productImage: { width: 48, height: 48, borderRadius: 6, marginRight: 10 },
-  placeholderImage: { backgroundColor: '#e0e0e0' },
-  cardInfo: { flex: 1, paddingRight: 8 },
-  cardTitle: { fontSize: 15, fontWeight: '600' },
-  cardBrand: { fontSize: 12, color: '#007AFF', fontWeight: '500' },
-  cardDetails: { fontSize: 12, color: '#666', marginTop: 2 },
-  empty: { textAlign: 'center', color: '#888', marginTop: 30 },
-  detailCard: { backgroundColor: '#fff', padding: 20, borderRadius: 12, borderWidth: 1, borderColor: '#e0e0e0' },
-  detailTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
-  label: { fontSize: 14, color: '#555', marginBottom: 6 },
-  inputQuantite: { backgroundColor: '#f9f9f9', borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, fontSize: 16, marginBottom: 16 },
-  buttonRow: { flexDirection: 'row', justifyContent: 'space-between' },
-});
