@@ -58,22 +58,28 @@ export function useSupprimerConsommation() {
 
   return useMutation({
     mutationFn: async ({ id, date }: { id: string; date: string }) => {
-      // Supabase a besoin d'un ID valide, on sécurise
-      if (!id) throw new Error("ID manquant pour la suppression");
-
       const { data, error } = await supabase
         .from('journal_consommations')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select(); // Renvoie les lignes effectivement effacées
 
       if (error) {
-        console.error("Erreur Supabase lors de la suppression :", error);
+        console.error("Erreur Supabase lors de la suppression :", error.message);
         throw error;
       }
+
+      if (!data || data.length === 0) {
+        console.warn("0 ligne supprimée : vérifie la politique RLS ou le user_id de la ligne");
+        throw new Error("Aucune ligne supprimée.");
+      }
+
       return data;
     },
+    onError: (error: Error) => {
+      console.error("Échec de la suppression :", error.message);
+    },
     onSuccess: (_, variables) => {
-      // Invalidation stricte du cache
       queryClient.invalidateQueries({ queryKey: ['journal', variables.date] });
     },
   });

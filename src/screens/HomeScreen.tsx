@@ -1,4 +1,5 @@
 import React, { useState, useContext } from 'react';
+import { Platform } from 'react-native';
 import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { ThemeContext } from '../context/ThemeContext';
 import { getGlobalStyles } from '../styles/globalStyles';
@@ -51,19 +52,28 @@ export default function HomeScreen() {
   };
 
   const totalCalories = journal.reduce((acc, item) => acc + Number(item.calories), 0);
-  
+
 // fonction pour supprimer les elements 
-  const supprimerElement = (id: string) => {
+const supprimerElement = (id: string) => {
   console.log("Tentative de suppression, ID:", id, "Date:", dateString);
-  
-  Alert.alert('Supprimer', 'Voulez-vous retirer cet aliment de votre journal ?', [
-    { text: 'Annuler', style: 'cancel' },
-    {
-      text: 'Supprimer',
-      style: 'destructive',
-      onPress: () => supprimerMutation.mutate({ id, date: dateString }),
-    },
-  ]);
+
+  if (Platform.OS === 'web') {
+    // Sur le Web, on utilise la boîte de confirmation standard du navigateur
+    const confirmDelete = window.confirm("Voulez-vous retirer cet aliment de votre journal ?");
+    if (confirmDelete) {
+      supprimerMutation.mutate({ id, date: dateString });
+    }
+  } else {
+    // Sur mobile, on utilise l'Alert native
+    Alert.alert('Supprimer', 'Voulez-vous retirer cet aliment de votre journal ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: () => supprimerMutation.mutate({ id, date: dateString }),
+      },
+    ]);
+  }
 };
 
   return (
