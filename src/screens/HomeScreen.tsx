@@ -7,6 +7,7 @@ import ProfileModal from '../components/ProfileModal';
 import SearchFoodModal from '../components/SearchFoodModal';
 import { useJournal, useSupprimerConsommation } from '../hooks/useJournal';
 import WeeklyCalendar from '../components/WeeklyCalendar';
+import ProgressBar from '../components/ProgressBar';
 
 // Helper pour éviter le décalage UTC
 const formatLocalDate = (date: Date): string => {
@@ -52,7 +53,17 @@ export default function HomeScreen() {
   };
 
   const totalCalories = journal.reduce((acc, item) => acc + Number(item.calories), 0);
+const totalProteines = journal.reduce((acc, item) => acc + Number(item.proteines || 0), 0);
+const totalGlucides = journal.reduce((acc, item) => acc + Number(item.glucides || 0), 0);
+const totalLipides = journal.reduce((acc, item) => acc + Number(item.lipides || 0), 0);
 
+// Objectifs par défaut (à relier aux données profil plus tard)
+const objectifs = {
+  calories: 2000,
+  proteines: 140,
+  glucides: 200,
+  lipides: 65,
+};
 // fonction pour supprimer les elements 
 const supprimerElement = (id: string) => {
   console.log("Tentative de suppression, ID:", id, "Date:", dateString);
@@ -91,10 +102,35 @@ const supprimerElement = (id: string) => {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
         {/* Résumé de la journée */}
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Calories consommées</Text>
-          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#FFF' }}>
-            {Math.round(totalCalories)} kcal
-          </Text>
+       <View style={styles.card}>
+  <Text style={styles.sectionTitle}>Bilan de la journée</Text>
+  
+  <View style={{ marginVertical: 12, alignItems: 'center' }}>
+    <Text style={{ fontSize: 28, fontWeight: 'bold', color: theme.primary }}>
+      {Math.round(totalCalories)}{' '}
+      <Text style={{ fontSize: 16, color: theme.textSecondary }}>/ {objectifs.calories} kcal</Text>
+    </Text>
+  </View>
+
+  <ProgressBar
+    label="Protéines"
+    actuel={totalProteines}
+    objectif={objectifs.proteines}
+    couleur="#E53935"
+  />
+  <ProgressBar
+    label="Glucides"
+    actuel={totalGlucides}
+    objectif={objectifs.glucides}
+    couleur="#FB8C00"
+  />
+  <ProgressBar
+    label="Lipides"
+    actuel={totalLipides}
+    objectif={objectifs.lipides}
+    couleur="#1E88E5"
+  />
+</View>
         </View>
 
         {isLoading ? (
