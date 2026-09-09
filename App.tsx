@@ -4,7 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons'; // Icônes incluses dans Expo
-
+import MealsScreen from './src/screens/MealsScreen';
 import { supabase } from './src/services/supabase';
 import { ThemeProvider, ThemeContext } from './src/context/ThemeContext';
 
@@ -31,12 +31,12 @@ function AppTabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: false, // On cache le header natif, on a déjà les nôtres
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: theme.background,
           borderTopColor: theme.border,
-          elevation: 0, // Enlève l'ombre sur Android pour un style plus plat (flat design)
-          shadowOpacity: 0, // Enlève l'ombre sur iOS
+          elevation: 0,
+          shadowOpacity: 0,
           height: 60,
           paddingBottom: 10,
         },
@@ -45,8 +45,11 @@ function AppTabs() {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap;
 
+          // Attribution des icônes selon la route
           if (route.name === 'Journal') {
             iconName = focused ? 'book' : 'book-outline';
+          } else if (route.name === 'Recettes') {
+            iconName = focused ? 'restaurant' : 'restaurant-outline';
           } else if (route.name === 'Statistiques') {
             iconName = focused ? 'bar-chart' : 'bar-chart-outline';
           } else {
@@ -58,6 +61,7 @@ function AppTabs() {
       })}
     >
       <Tab.Screen name="Journal" component={HomeScreen} />
+      <Tab.Screen name="Recettes" component={MealsScreen} /> 
       <Tab.Screen name="Statistiques" component={AnalyticsScreen} />
     </Tab.Navigator>
   );

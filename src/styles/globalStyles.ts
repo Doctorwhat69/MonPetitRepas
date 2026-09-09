@@ -89,7 +89,23 @@ export const getGlobalStyles = (theme: Theme) =>
       justifyContent: 'space-between',
       marginTop: 10,
     },
+    
+    button: {
+  backgroundColor: theme.primary,
+  paddingVertical: 12,
+  paddingHorizontal: 20,
+  borderRadius: 10,
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginTop: 10,
+},
+buttonText: {
+  color: '#FFFFFF',
+  fontSize: 15,
+  fontWeight: 'bold',
+},
 
+  
     // =========================================================================
     // 3. TYPOGRAPHIE & TEXTES
     // =========================================================================
