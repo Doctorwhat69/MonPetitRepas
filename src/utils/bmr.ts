@@ -1,39 +1,49 @@
-export function calculerBmrEtMacros(
-  poids: number,
-  taille: number,
-  age: number,
-  genre: 'homme' | 'femme',
-  activite: string,
-  objectifPoids: string
-) {
-  // 1. Calcul du BMR (Mifflin-St Jeor)
-  const bmr = 10 * poids + 6.25 * taille - 5 * age + (genre === 'femme' ? -161 : 5);
+export interface ProfileData {
+  sexe: 'homme' | 'femme';
+  age: number;
+  poids: number; // en kg
+  taille: number; // en cm
+  activite: 'sedentaire' | 'leger' | 'modere' | 'actif' | 'tres_actif';
+  objectif: 'perte' | 'maintien' | 'prise';
+}
+
+export function calculerObjectifs(params: ProfileData) {
+  const { sexe, age, poids, taille, activite, objectif } = params;
+
+  // 1. Métabolisme de base (BMR - Mifflin-St Jeor)
+  let bmr = 10 * poids + 6.25 * taille - 5 * age;
+  bmr = sexe === 'homme' ? bmr + 5 : bmr - 161;
 
   // 2. Facteur d'activité (TDEE)
-  const facteursActivite: Record<string, number> = {
+  const facteursActivite = {
     sedentaire: 1.2,
     leger: 1.375,
     modere: 1.55,
     actif: 1.725,
     tres_actif: 1.9,
   };
-  const tdee = bmr * (facteursActivite[activite] || 1.55);
+  let tdee = bmr * (facteursActivite[activite] || 1.55);
 
-  // 3. Ajustement selon l'objectif de poids
-  const ajustements: Record<string, number> = {
-    perte_rapide: -500,
-    perte_douce: -250,
-    maintien: 0,
-    prise_douce: 250,
-    prise_rapide: 500,
+  // 3. Ajustement selon l'objectif
+  if (objectif === 'perte') tdee *= 0.85; // Déficit de 15%
+  if (objectif === 'prise') tdee *= 1.15; // Surplus de 15%
+
+  const caloriesCible = Math.round(tdee);
+
+  // 4. Répartition des macronutriments
+  const proteinesCible = Math.round(poids * 2); // 2g par kg
+  const lipidesCible = Math.round(poids * 1); // 1g par kg
+
+  // Le reste des calories va aux glucides (1g glucides = 4 kcal)
+  const calProteines = proteinesCible * 4;
+  const calLipides = lipidesCible * 9;
+  const calGlucidesRestantes = caloriesCible - (calProteines + calLipides);
+  const glucidesCible = Math.max(0, Math.round(calGlucidesRestantes / 4));
+
+  return {
+    calories_cible: caloriesCible,
+    proteines_cible: proteinesCible,
+    glucides_cible: glucidesCible,
+    lipides_cible: lipidesCible,
   };
-  const calories = Math.max(1200, Math.round(tdee + (ajustements[objectifPoids] || 0)));
-
-  // 4. Répartition des macronutriments : Protéines (2g/kg), Lipides (1g/kg), Reste en Glucides
-  const proteines = Math.round(poids * 2);
-  const lipides = Math.round(poids * 1);
-  const caloriesRestantes = calories - (proteines * 4 + lipides * 9);
-  const glucides = Math.max(0, Math.round(caloriesRestantes / 4));
-
-  return { calories, proteines, glucides, lipides };
 }

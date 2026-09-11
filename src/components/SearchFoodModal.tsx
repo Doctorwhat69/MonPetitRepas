@@ -1,18 +1,20 @@
 import React, { useState, useContext } from 'react';
 import {
-  Modal,
   View,
   Text,
+  Modal,
   TextInput,
   TouchableOpacity,
   FlatList,
+  StyleSheet,
   ActivityIndicator,
-  Button,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../context/ThemeContext';
 import { getGlobalStyles } from '../styles/globalStyles';
-import { useSearchFood, useCreerAlimentCustom, AlimentItem } from '../hooks/useSearchFood';
+import { useSearchFood, AlimentItem } from '../hooks/useSearchFood';
 import { useAjouterConsommation } from '../hooks/useJournal';
+import AddCustomFoodModal from './AddCustomFoodModal';
 
 interface Props {
   visible: boolean;
@@ -23,213 +25,226 @@ interface Props {
 
 export default function SearchFoodModal({ visible, moment, dateString, onClose }: Props) {
   const { theme } = useContext(ThemeContext);
-  const styles = getGlobalStyles(theme);
+  const globalStyles = getGlobalStyles(theme);
 
-  const [query, setQuery] = useState('');
-  const [selectedAliment, setSelectedAliment] = useState<AlimentItem | null>(null);
-  const [quantite, setQuantite] = useState('100');
+  const [search, setSearch] = useState('');
+  const [selectedItem, setSelectedItem] = useState<AlimentItem | null>(null);
+  const [quantiteG, setQuantiteG] = useState('100');
+  const [showAddCustom, setShowAddCustom] = useState(false);
 
-  // Mode création d'un aliment personnalisé
-  const [modeCreation, setModeCreation] = useState(false);
-  const [customNom, setCustomNom] = useState('');
-  const [customCal, setCustomCal] = useState('');
-  const [customProt, setCustomProt] = useState('');
-  const [customGluc, setCustomGluc] = useState('');
-  const [customLip, setCustomLip] = useState('');
+  const { data: results = [], isLoading, refetch } = useSearchFood(search);
+  const ajouterMutation = useAjouterConsommation();
 
-  const { data: resultats = [], isLoading } = useSearchFood(query);
-  const ajouterConsommationMutation = useAjouterConsommation();
-  const creerAlimentMutation = useCreerAlimentCustom();
-
-  const reinitialiser = () => {
-    setQuery('');
-    setSelectedAliment(null);
-    setQuantite('100');
-    setModeCreation(false);
-    setCustomNom('');
-    setCustomCal('');
-    setCustomProt('');
-    setCustomGluc('');
-    setCustomLip('');
-    onClose();
+  const handleSelect = (item: AlimentItem) => {
+    setSelectedItem(item);
   };
 
-  const validerAjout = () => {
-    if (!selectedAliment || !moment) return;
-    const q = parseFloat(quantite) || 100;
-    const ratio = q / 100;
+ const handleValidateAdd = () => {
+  if (!selectedItem || !moment) return;
 
-    ajouterConsommationMutation.mutate(
-      {
-        date_consommation: dateString,
-        moment,
-        aliment_nom: selectedAliment.nom,
-        quantite: q,
-        calories: Math.round(selectedAliment.calories * ratio),
-        proteines: Number((selectedAliment.proteines * ratio).toFixed(1)),
-        glucides: Number((selectedAliment.glucides * ratio).toFixed(1)),
-        lipides: Number((selectedAliment.lipides * ratio).toFixed(1)),
+  const g = parseFloat(quantiteG) || 100;
+  const ratio = g / 100;
+
+  ajouterMutation.mutate(
+    {
+      date_consommation: dateString,
+      moment,
+      aliment_nom: selectedItem.nom,
+      quantite: g,
+      calories: Math.round(selectedItem.calories * ratio),
+      proteines: Number((selectedItem.proteines * ratio).toFixed(1)),
+      glucides: Number((selectedItem.glucides * ratio).toFixed(1)),
+      lipides: Number((selectedItem.lipides * ratio).toFixed(1)),
+    },
+    {
+      onSuccess: () => {
+        setSelectedItem(null);
+        setSearch('');
+        setQuantiteG('100');
+        onClose();
       },
-      {
-        onSuccess: () => reinitialiser(),
-      }
-    );
-  };
-
-  const validerCreationEtAjout = () => {
-    if (!customNom.trim() || !customCal || !moment) return;
-
-    const cal = parseFloat(customCal) || 0;
-    const prot = parseFloat(customProt) || 0;
-    const gluc = parseFloat(customGluc) || 0;
-    const lip = parseFloat(customLip) || 0;
-
-    creerAlimentMutation.mutate(
-      { nom: customNom.trim(), calories: cal, proteines: prot, glucides: gluc, lipides: lip },
-      {
-        onSuccess: (nouvelAliment) => {
-          setSelectedAliment({ ...nouvelAliment, isCustom: true });
-          setModeCreation(false);
-        },
-      }
-    );
-  };
-
-  const ratio = (parseFloat(quantite) || 0) / 100;
+    }
+  );
+};
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={styles.container}>
+    <Modal visible={visible} animationType="slide" transparent={false}>
+      <View style={globalStyles.container}>
+        {/* En-tête */}
         <View style={styles.header}>
-          <Text style={styles.title}>
-            {modeCreation
-              ? 'Créer un aliment'
-              : selectedAliment
-              ? 'Sélectionner la quantité'
-              : 'Ajouter un aliment'}
-          </Text>
-          <Button title="Fermer" onPress={reinitialiser} color={theme.danger} />
+          <Text style={globalStyles.title}>Ajouter un aliment</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Ionicons name="close" size={24} color={theme.text} />
+          </TouchableOpacity>
         </View>
 
-        {/* MODE 1 : SAISIE DE LA QUANTITÉ */}
-        {selectedAliment ? (
-          <View style={styles.detailCard}>
-            <Text style={styles.detailTitle}>{selectedAliment.nom}</Text>
-            <Text style={styles.label}>Quantité consommée (en grammes) :</Text>
+        {/* Barre de recherche */}
+        <View style={[styles.searchBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Ionicons name="search" size={20} color={theme.textSecondary} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.text }]}
+            placeholder="Rechercher (ex: Flocons d'avoine)..."
+            placeholderTextColor={theme.textSecondary}
+            value={search}
+            onChangeText={setSearch}
+            autoFocus
+          />
+        </View>
+
+        {/* Bouton création d'un aliment personnalisé */}
+        <TouchableOpacity
+          style={[styles.createCustomBtn, { borderColor: theme.primary }]}
+          onPress={() => setShowAddCustom(true)}
+        >
+          <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
+          <Text style={{ color: theme.primary, fontWeight: 'bold', fontSize: 14 }}>
+            Aliment introuvable ? Créer un aliment
+          </Text>
+        </TouchableOpacity>
+
+        {/* Écran de saisie du grammage si aliment sélectionné */}
+        {selectedItem ? (
+          <View style={[globalStyles.card, { marginTop: 15 }]}>
+            <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>
+              {selectedItem.nom}
+            </Text>
+            <Text style={{ color: theme.textSecondary, marginBottom: 12 }}>
+              Valeurs pour 100g : {selectedItem.calories} kcal | P: {selectedItem.proteines}g G: {selectedItem.glucides}g L: {selectedItem.lipides}g
+            </Text>
+
+            <Text style={{ color: theme.text, marginBottom: 6, fontWeight: '600' }}>Quantité consommée (en g) :</Text>
             <TextInput
-              style={styles.inputQuantite}
+              style={[styles.gramInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
               keyboardType="numeric"
-              value={quantite}
-              onChangeText={setQuantite}
-              autoFocus
+              value={quantiteG}
+              onChangeText={setQuantiteG}
             />
 
-            <View style={{ marginVertical: 12 }}>
-              <Text style={styles.textSecondary}>Apport calculé pour {quantite || 0}g :</Text>
-              <Text style={styles.caloriesText}>
-                {Math.round(selectedAliment.calories * ratio)} kcal
-              </Text>
-              <Text style={styles.macrosText}>
-                Prot: {(selectedAliment.proteines * ratio).toFixed(1)}g | Gluc:{' '}
-                {(selectedAliment.glucides * ratio).toFixed(1)}g | Lip:{' '}
-                {(selectedAliment.lipides * ratio).toFixed(1)}g
-              </Text>
-            </View>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 15 }}>
+              <TouchableOpacity
+                style={[styles.btnAction, { backgroundColor: theme.border }]}
+                onPress={() => setSelectedItem(null)}
+              >
+                <Text style={{ color: theme.text }}>Retour</Text>
+              </TouchableOpacity>
 
-            <View style={styles.buttonRow}>
-              <Button title="Retour" onPress={() => setSelectedAliment(null)} color="#757575" />
-              <Button
-                title="Ajouter au journal"
-                onPress={validerAjout}
-                color={theme.primary}
-                disabled={ajouterConsommationMutation.isPending}
-              />
-            </View>
-          </View>
-        ) : modeCreation ? (
-          /* MODE 2 : CRÉATION D'UN ALIMENT PERSONNALISÉ */
-          <View style={styles.detailCard}>
-            <Text style={styles.label}>Nom de l'aliment :</Text>
-            <TextInput style={styles.input} value={customNom} onChangeText={setCustomNom} placeholder="ex: Mon Smoothie Protéiné" />
-
-            <Text style={styles.label}>Valeurs pour 100g :</Text>
-            <View style={styles.grid2}>
-              <View style={styles.field}>
-                <Text style={styles.label}>Kcal :</Text>
-                <TextInput style={styles.input} keyboardType="numeric" value={customCal} onChangeText={setCustomCal} />
-              </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>Prot (g) :</Text>
-                <TextInput style={styles.input} keyboardType="numeric" value={customProt} onChangeText={setCustomProt} />
-              </View>
-            </View>
-
-            <View style={styles.grid2}>
-              <View style={styles.field}>
-                <Text style={styles.label}>Glucides (g) :</Text>
-                <TextInput style={styles.input} keyboardType="numeric" value={customGluc} onChangeText={setCustomGluc} />
-              </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>Lipides (g) :</Text>
-                <TextInput style={styles.input} keyboardType="numeric" value={customLip} onChangeText={setCustomLip} />
-              </View>
-            </View>
-
-            <View style={styles.buttonRow}>
-              <Button title="Annuler" onPress={() => setModeCreation(false)} color="#757575" />
-              <Button title="Créer l'aliment" onPress={validerCreationEtAjout} color={theme.primary} />
+              <TouchableOpacity
+                style={[globalStyles.button, { marginTop: 0, flex: 1 }]}
+                onPress={handleValidateAdd}
+                disabled={ajouterMutation.isPending}
+              >
+                {ajouterMutation.isPending ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={globalStyles.buttonText}>Valider l'ajout</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         ) : (
-          /* MODE 3 : RECHERCHE DE L'ALIMENT */
-          <>
-            <TextInput
-              style={styles.input}
-              placeholder="Rechercher (ex: Poulet, Riz, Pomme...)"
-              placeholderTextColor={theme.textSecondary}
-              value={query}
-              onChangeText={setQuery}
-              autoFocus
-            />
-
-            {isLoading && <ActivityIndicator color={theme.primary} style={{ marginVertical: 10 }} />}
+          /* Liste des résultats de recherche */
+          <View style={{ flex: 1, marginTop: 10 }}>
+            {isLoading && <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 20 }} />}
 
             <FlatList
-              data={resultats}
+              data={results}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <TouchableOpacity style={styles.itemCard} onPress={() => setSelectedAliment(item)}>
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.cardTitle}>
-                      {item.nom} {item.isCustom ? '⭐' : ''}
-                    </Text>
-                    <Text style={styles.cardDetails}>
-                      Pour 100g : {item.calories} kcal | P: {item.proteines}g G: {item.glucides}g L:{' '}
-                      {item.lipides}g
+                <TouchableOpacity
+                  style={[styles.itemRow, { borderBottomColor: theme.border }]}
+                  onPress={() => handleSelect(item)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ color: theme.text, fontWeight: '600', fontSize: 15 }}>{item.nom}</Text>
+                      {item.isCustom && (
+                        <View style={[styles.badgeCustom, { backgroundColor: theme.primary }]}>
+                          <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>Perso</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 2 }}>
+                      {item.calories} kcal/100g — P: {item.proteines}g G: {item.glucides}g L: {item.lipides}g
                     </Text>
                   </View>
+                  <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={
-                query.length >= 2 && !isLoading ? (
-                  <View style={{ alignItems: 'center', marginTop: 20 }}>
-                    <Text style={styles.emptyText}>Aucun aliment trouvé pour "{query}"</Text>
-                    <TouchableOpacity
-                      style={[styles.chip, { marginTop: 12, backgroundColor: theme.primary }]}
-                      onPress={() => {
-                        setCustomNom(query);
-                        setModeCreation(true);
-                      }}
-                    >
-                      <Text style={styles.chipTextActive}>+ Créer cet aliment</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : null
-              }
             />
-          </>
+          </View>
         )}
+
+        {/* Modale de création d'aliment manquant */}
+        <AddCustomFoodModal
+          visible={showAddCustom}
+          onClose={() => setShowAddCustom(false)}
+          onSuccess={() => {
+            refetch();
+          }}
+        />
       </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  closeBtn: {
+    padding: 6,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 46,
+    marginBottom: 10,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 15,
+  },
+  createCustomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  badgeCustom: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  gramInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  btnAction: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

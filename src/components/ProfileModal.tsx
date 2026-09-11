@@ -1,304 +1,233 @@
 import React, { useState, useEffect, useContext } from 'react';
 import {
-  Modal,
   View,
   Text,
+  Modal,
   TextInput,
-  Button,
-  StyleSheet,
-  ScrollView,
-  Alert,
   TouchableOpacity,
-  Image,
+  ScrollView,
+  StyleSheet,
   ActivityIndicator,
 } from 'react-native';
-import { supabase } from '../services/supabase';
-import { calculerBmrEtMacros } from '../utils/bmr';
 import { ThemeContext } from '../context/ThemeContext';
-import { getGlobalStyles } from '../styles/globalStyles'; 
+import { getGlobalStyles } from '../styles/globalStyles';
+import { useProfile } from '../hooks/useProfile';
+import { ProfileData, calculerObjectifs } from '../utils/bmr';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onProfileUpdated: (calories: number) => void;
 }
 
-const DEFAULT_AVATAR = require('../../assets/default-avatar.jpg');
+export default function ProfileModal({ visible, onClose }: Props) {
+  const { theme } = useContext(ThemeContext);
+  const globalStyles = getGlobalStyles(theme);
 
-export default function ProfileModal({ visible, onClose, onProfileUpdated }: Props) {
-  const [loading, setLoading] = useState(false);
-  const [modeAuto, setModeAuto] = useState(true);
-const { theme, isDarkMode, toggleTheme } = useContext(ThemeContext);
-  const styles = getGlobalStyles(theme);
-  // Données physiques
+  const { profile, updateProfile, isUpdating } = useProfile();
+
+  const [sexe, setSexe] = useState<'homme' | 'femme'>('homme');
   const [age, setAge] = useState('25');
-  const [genre, setGenre] = useState<'homme' | 'femme'>('homme');
   const [poids, setPoids] = useState('70');
   const [taille, setTaille] = useState('175');
-  const [activite, setActivite] = useState('modere');
-  const [objectifPoids, setObjectifPoids] = useState('maintien');
-
-  // Objectifs cibles
-  const [calories, setCalories] = useState('2000');
-  const [proteines, setProteines] = useState('140');
-  const [glucides, setGlucides] = useState('200');
-  const [lipides, setLipides] = useState('65');
-  const [avatarUrl, setAvatarUrl] = useState(DEFAULT_AVATAR);
+  const [activite, setActivite] = useState<'sedentaire' | 'leger' | 'modere' | 'actif' | 'tres_actif'>('modere');
+  const [objectif, setObjectif] = useState<'perte' | 'maintien' | 'prise'>('maintien');
 
   useEffect(() => {
-    if (visible) chargerProfil();
-  }, [visible]);
-
-  // Recalcul automatique si changement de métriques en mode automatique
-  useEffect(() => {
-    if (modeAuto) {
-      const p = parseFloat(poids) || 0;
-      const t = parseFloat(taille) || 0;
-      const a = parseInt(age, 10) || 0;
-
-      if (p > 0 && t > 0 && a > 0) {
-        const res = calculerBmrEtMacros(p, t, a, genre, activite, objectifPoids);
-        setCalories(res.calories.toString());
-        setProteines(res.proteines.toString());
-        setGlucides(res.glucides.toString());
-        setLipides(res.lipides.toString());
-      }
+    if (profile) {
+      setSexe(profile.sexe);
+      setAge(String(profile.age));
+      setPoids(String(profile.poids));
+      setTaille(String(profile.taille));
+      setActivite(profile.activite);
+      setObjectif(profile.objectif);
     }
-  }, [poids, taille, age, genre, activite, objectifPoids, modeAuto]);
+  }, [profile]);
 
-  const chargerProfil = async () => {
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (user) {
-      const { data } = await supabase
-        .from('profils')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (data) {
-        setAge(String(data.age || 25));
-        setGenre(data.genre || 'homme');
-        setPoids(String(data.poids || 70));
-        setTaille(String(data.taille || 175));
-        setActivite(data.activite || 'modere');
-        setObjectifPoids(data.objectif_poids || 'maintien');
-        setCalories(String(data.objectif_calories || 2000));
-        setProteines(String(data.objectif_proteines || 140));
-        setGlucides(String(data.objectif_glucides || 200));
-        setLipides(String(data.objectif_lipides || 65));
-        if (data.avatar_url) setAvatarUrl(data.avatar_url);
-      }
-    }
-    setLoading(false);
+  // Aperçu en temps réel
+  const currentParams: ProfileData = {
+    sexe,
+    age: parseFloat(age) || 25,
+    poids: parseFloat(poids) || 70,
+    taille: parseFloat(taille) || 175,
+    activite,
+    objectif,
   };
+  const preview = calculerObjectifs(currentParams);
 
-  const Sauvegarder = async () => {
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (user) {
-      const payload = {
-        user_id: user.id,
-        age: parseInt(age, 10),
-        genre,
-        poids: parseFloat(poids),
-        taille: parseFloat(taille),
-        activite,
-        objectif_poids: objectifPoids,
-        objectif_calories: parseInt(calories, 10),
-        objectif_proteines: parseInt(proteines, 10),
-        objectif_glucides: parseInt(glucides, 10),
-        objectif_lipides: parseInt(lipides, 10),
-        avatar_url: avatarUrl,
-      };
-
-      const { error } = await supabase
-        .from('profils')
-        .upsert(payload, { onConflict: 'user_id' });
-
-      if (!error) {
-        onProfileUpdated(payload.objectif_calories);
-        onClose();
-      } else {
-        Alert.alert('Erreur', 'Impossible de sauvegarder le profil.');
-      }
-    }
-    setLoading(false);
+  const handleSave = async () => {
+    await updateProfile(currentParams);
+    onClose();
   };
-
-  const calJour = parseInt(calories, 10) || 0;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <ScrollView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Mon Profil Nutritionnel</Text>
-          <Button title="Fermer" onPress={onClose} color="#d32f2f" />
-        </View>
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.overlay}>
+        <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[globalStyles.sectionTitle, { marginBottom: 16 }]}>Mon Profil & Objectifs</Text>
 
-        {loading ? (
-          <ActivityIndicator size="large" color="#00BCD4" style={{ marginTop: 20 }} />
-        ) : (
-          <View style={styles.content}>
-            {/* Photo de profil */}
-          <View style={styles.avatarSection}>
-  <Image
-    source={
-      typeof avatarUrl === 'string' && avatarUrl.startsWith('http')
-        ? { uri: avatarUrl }
-        : DEFAULT_AVATAR
-    }
-    style={styles.avatar}
-  />
-  <TextInput
-    style={styles.inputAvatar}
-    placeholder="Lien d'image d'avatar (URL optionnelle)..."
-    value={avatarUrl}
-    onChangeText={setAvatarUrl}
-  />
-</View>
-
-            {/* Informations Physiques */}
-            <Text style={styles.sectionTitle}>1. Données Personnelles</Text>
-
-            <View style={styles.row}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Sexe */}
+            <Text style={[styles.label, { color: theme.text }]}>Sexe</Text>
+            <View style={styles.rowBtn}>
               <TouchableOpacity
-                style={[styles.badge, genre === 'homme' && styles.badgeActive]}
-                onPress={() => setGenre('homme')}
+                style={[styles.segmentBtn, sexe === 'homme' && { backgroundColor: theme.primary }]}
+                onPress={() => setSexe('homme')}
               >
-                <Text style={genre === 'homme' ? styles.textActive : styles.textInactive}>Homme</Text>
+                <Text style={{ color: sexe === 'homme' ? '#FFF' : theme.textSecondary, fontWeight: 'bold' }}>Homme</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.badge, genre === 'femme' && styles.badgeActive]}
-                onPress={() => setGenre('femme')}
+                style={[styles.segmentBtn, sexe === 'femme' && { backgroundColor: theme.primary }]}
+                onPress={() => setSexe('femme')}
               >
-                <Text style={genre === 'femme' ? styles.textActive : styles.textInactive}>Femme</Text>
+                <Text style={{ color: sexe === 'femme' ? '#FFF' : theme.textSecondary, fontWeight: 'bold' }}>Femme</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.grid2}>
-              <View style={styles.field}>
-                <Text style={styles.label}>Âge :</Text>
-                <TextInput style={styles.input} keyboardType="numeric" value={age} onChangeText={setAge} />
+            {/* Mensurations */}
+            <View style={styles.rowInput}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.label, { color: theme.text }]}>Âge</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+                  keyboardType="numeric"
+                  value={age}
+                  onChangeText={setAge}
+                />
               </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>Taille (cm) :</Text>
-                <TextInput style={styles.input} keyboardType="numeric" value={taille} onChangeText={setTaille} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.label, { color: theme.text }]}>Poids (kg)</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+                  keyboardType="numeric"
+                  value={poids}
+                  onChangeText={setPoids}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.label, { color: theme.text }]}>Taille (cm)</Text>
+                <TextInput
+                  style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+                  keyboardType="numeric"
+                  value={taille}
+                  onChangeText={setTaille}
+                />
               </View>
             </View>
 
-            <View style={styles.field}>
-              <Text style={styles.label}>Poids actuel (kg) :</Text>
-              <TextInput style={styles.input} keyboardType="numeric" value={poids} onChangeText={setPoids} />
-            </View>
-
-            {/* Niveau d'activité */}
-            <Text style={styles.label}>Niveau d'activité physique :</Text>
-            <View style={styles.wrapRow}>
-              {[
-                { id: 'sedentaire', label: 'Sédentaire' },
-                { id: 'leger', label: 'Légère (1-2x/sem)' },
-                { id: 'modere', label: 'Modérée (3-5x/sem)' },
-                { id: 'actif', label: 'Intensive (6-7x/sem)' },
-              ].map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.chip, activite === item.id && styles.chipActive]}
-                  onPress={() => setActivite(item.id)}
-                >
-                  <Text style={activite === item.id ? styles.chipTextActive : styles.chipText}>
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Objectif de Poids */}
-            <Text style={styles.sectionTitle}>2. Objectif de Poids</Text>
-            <View style={styles.wrapRow}>
-              {[
-                { id: 'perte_rapide', label: 'Perte rapide (-500 kcal)' },
-                { id: 'perte_douce', label: 'Perte douce (-250 kcal)' },
-                { id: 'maintien', label: 'Maintien' },
-                { id: 'prise_douce', label: 'Prise de masse (+250 kcal)' },
-              ].map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.chip, objectifPoids === item.id && styles.chipActive]}
-                  onPress={() => setObjectifPoids(item.id)}
-                >
-                  <Text style={objectifPoids === item.id ? styles.chipTextActive : styles.chipText}>
-                    {item.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Calcul & Macronutriments */}
-            <View style={styles.calcHeader}>
-              <Text style={styles.sectionTitle}>3. Objectifs Quotidiens</Text>
-              <TouchableOpacity onPress={() => setModeAuto(!modeAuto)}>
-                <Text style={styles.toggleAuto}>
-                  {modeAuto ? 'Mode : Auto' : 'Mode : Manuel'}
-                </Text>
+            {/* Objectif */}
+            <Text style={[styles.label, { color: theme.text, marginTop: 10 }]}>Objectif</Text>
+            <View style={styles.rowBtn}>
+              <TouchableOpacity
+                style={[styles.segmentBtn, objectif === 'perte' && { backgroundColor: theme.primary }]}
+                onPress={() => setObjectif('perte')}
+              >
+                <Text style={{ color: objectif === 'perte' ? '#FFF' : theme.textSecondary, fontSize: 12, fontWeight: 'bold' }}>Perte</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.segmentBtn, objectif === 'maintien' && { backgroundColor: theme.primary }]}
+                onPress={() => setObjectif('maintien')}
+              >
+                <Text style={{ color: objectif === 'maintien' ? '#FFF' : theme.textSecondary, fontSize: 12, fontWeight: 'bold' }}>Maintien</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.segmentBtn, objectif === 'prise' && { backgroundColor: theme.primary }]}
+                onPress={() => setObjectif('prise')}
+              >
+                <Text style={{ color: objectif === 'prise' ? '#FFF' : theme.textSecondary, fontSize: 12, fontWeight: 'bold' }}>Prise</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Équivalences temporelles de calories */}
-            <View style={styles.timeBox}>
-              <Text style={styles.timeText}>Jour : {calJour} kcal</Text>
-              <Text style={styles.timeText}>Semaine : {(calJour * 7).toLocaleString('fr-FR')} kcal</Text>
-              <Text style={styles.timeText}>Mois : {(calJour * 30).toLocaleString('fr-FR')} kcal</Text>
+            {/* Aperçu des cibles calculées */}
+            <View style={[styles.previewCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <Text style={{ color: theme.textSecondary, fontSize: 12, marginBottom: 4 }}>Besoins calculés :</Text>
+              <Text style={{ color: theme.primary, fontSize: 20, fontWeight: 'bold' }}>
+                {preview.calories_cible} kcal / jour
+              </Text>
+              <Text style={{ color: theme.text, fontSize: 12, marginTop: 4 }}>
+                P: {preview.proteines_cible}g | G: {preview.glucides_cible}g | L: {preview.lipides_cible}g
+              </Text>
             </View>
+          </ScrollView>
 
-            <View style={styles.grid3}>
-              <View style={styles.field}>
-                <Text style={styles.label}>Prot (g) :</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  editable={!modeAuto}
-                  value={proteines}
-                  onChangeText={setProteines}
-                />
-              </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>Gluc (g) :</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  editable={!modeAuto}
-                  value={glucides}
-                  onChangeText={setGlucides}
-                />
-              </View>
-              <View style={styles.field}>
-                <Text style={styles.label}>Lip (g) :</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="numeric"
-                  editable={!modeAuto}
-                  value={lipides}
-                  onChangeText={setLipides}
-                />
-              </View>
-            </View>
-<View style={styles.themeRow}>
-  <Text style={[styles.label, { color: theme.text }]}>Apparence de l'application :</Text>
-  <TouchableOpacity style={[styles.chip, { backgroundColor: theme.primary }]} onPress={toggleTheme}>
-    <Text style={{ color: '#FFF', fontWeight: 'bold' }}>
-      {isDarkMode ? 'Mode Sombre 🌙' : 'Mode Clair ☀️'}
-    </Text>
-  </TouchableOpacity>
-</View>
-            <View style={{ marginTop: 20, marginBottom: 40 }}>
-              <Button title="Enregistrer le profil" onPress={Sauvegarder} color="#00BCD4" />
-            </View>
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity style={[styles.btn, { backgroundColor: theme.border }]} onPress={onClose}>
+              <Text style={{ color: theme.text, fontWeight: 'bold' }}>Annuler</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[globalStyles.button, { marginTop: 0, flex: 1 }]}
+              onPress={handleSave}
+              disabled={isUpdating}
+            >
+              {isUpdating ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={globalStyles.buttonText}>Enregistrer</Text>}
+            </TouchableOpacity>
           </View>
-        )}
-      </ScrollView>
+        </View>
+      </View>
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    maxHeight: '85%',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 20,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+  },
+  rowInput: {
+    flexDirection: 'row',
+    gap: 8,
+    marginVertical: 10,
+  },
+  rowBtn: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 10,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  previewCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 12,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 16,
+  },
+  btn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

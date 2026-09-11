@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../services/supabase';
 
 export interface AlimentItem {
@@ -11,80 +11,46 @@ export interface AlimentItem {
   isCustom?: boolean;
 }
 
-export function useSearchFood(searchQuery: string) {
+export function useSearchFood(query: string) {
   return useQuery({
-    queryKey: ['searchFood', searchQuery],
+    queryKey: ['searchFood', query],
     queryFn: async () => {
-      if (!searchQuery.trim() || searchQuery.length < 2) return [];
+      if (!query || query.trim().length < 2) return [];
 
-      const queryTerm = `%${searchQuery.trim()}%`;
+      const cleanQuery = query.trim();
 
-      // 1. Recherche dans CIQUAL
-      const { data: ciqualData, error: ciqualError } = await supabase
+      // 1. Recherche dans la base CIQUAL
+      const ciqualPromise = supabase
         .from('aliments_ciqual')
         .select('id, nom, calories, proteines, glucides, lipides')
-        .ilike('nom', queryTerm)
-        .limit(25);
+        .ilike('nom', `%${cleanQuery}%`)
+        .limit(15);
 
-      if (ciqualError) throw ciqualError;
-
-      // 2. Recherche dans les aliments perso de l'utilisateur
-      const { data: customData, error: customError } = await supabase
+      // 2. Recherche dans la table personnalisée
+      const customPromise = supabase
         .from('aliments_custom')
         .select('id, nom, calories, proteines, glucides, lipides')
-        .ilike('nom', queryTerm)
+        .ilike('nom', `%${cleanQuery}%`)
         .limit(10);
 
-      if (customError) throw customError;
+      const [ciqualRes, customRes] = await Promise.all([ciqualPromise, customPromise]);
 
-      const customResults: AlimentItem[] = (customData || []).map((item) => ({
+      if (ciqualRes.error) throw ciqualRes.error;
+      if (customRes.error) throw customRes.error;
+
+      const customItems: AlimentItem[] = (customRes.data || []).map((item) => ({
         ...item,
-        calories: Number(item.calories) || 0,
-        proteines: Number(item.proteines) || 0,
-        glucides: Number(item.glucides) || 0,
-        lipides: Number(item.lipides) || 0,
         isCustom: true,
       }));
 
-      const ciqualResults: AlimentItem[] = (ciqualData || []).map((item) => ({
+      const ciqualItems: AlimentItem[] = (ciqualRes.data || []).map((item) => ({
         ...item,
-        calories: Number(item.calories) || 0,
-        proteines: Number(item.proteines) || 0,
-        glucides: Number(item.glucides) || 0,
-        lipides: Number(item.lipides) || 0,
         isCustom: false,
       }));
 
-      // Les aliments perso remontent en premier
-      return [...customResults, ...ciqualResults];
+      // Les aliments personnalisés apparaissent en premier
+      return [...customItems, ...ciqualItems];
     },
-    enabled: searchQuery.trim().length >= 2,
-  });
-}
-
-// Mutation pour créer un nouvel aliment personnalisé
-export function useCreerAlimentCustom() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (nouvelAliment: {
-      nom: string;
-      calories: number;
-      proteines: number;
-      glucides: number;
-      lipides: number;
-    }) => {
-      const { data, error } = await supabase
-        .from('aliments_custom')
-        .insert(nouvelAliment)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['searchFood'] });
-    },
+    enabled: query.trim().length >= 2,
   });
 }
