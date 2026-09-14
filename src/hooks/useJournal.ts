@@ -84,3 +84,48 @@ export function useSupprimerConsommation() {
     },
   });
 }
+
+// Modifier la quantité d'une consommation
+export function useModifierConsommation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      id,
+      date,
+      nouvelleQuantite,
+      ancienneQuantite,
+      calories,
+      proteines,
+      glucides,
+      lipides,
+    }: {
+      id: string;
+      date: string;
+      nouvelleQuantite: number;
+      ancienneQuantite: number;
+      calories: number;
+      proteines: number;
+      glucides: number;
+      lipides: number;
+    }) => {
+      const ratio = nouvelleQuantite / (ancienneQuantite || 1);
+
+      const { error } = await supabase
+        .from('journal_consommations')
+        .update({
+          quantite: nouvelleQuantite,
+          calories: Math.round(calories * ratio),
+          proteines: Number((proteines * ratio).toFixed(1)),
+          glucides: Number((glucides * ratio).toFixed(1)),
+          lipides: Number((lipides * ratio).toFixed(1)),
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['journal', variables.date] });
+    },
+  });
+}

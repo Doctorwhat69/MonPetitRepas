@@ -7,6 +7,7 @@ import ProfileModal from '../components/ProfileModal';
 import SearchFoodModal from '../components/SearchFoodModal';
 import SaveMealModal from '../components/SaveMealModal';
 import SelectMealModal from '../components/SelectMealModal';
+import EditQuantityModal from '../components/EditQuantityModal';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import ProgressBar from '../components/ProgressBar';
 import { useJournal, useSupprimerConsommation } from '../hooks/useJournal';
@@ -44,6 +45,7 @@ export default function HomeScreen() {
     momentLabel: string;
     items: any[];
   } | null>(null);
+  const [selectedItemForEdit, setSelectedItemForEdit] = useState<any | null>(null);
 
   const dateString = formatLocalDate(dateJournal);
 
@@ -155,13 +157,18 @@ export default function HomeScreen() {
 
                 {alimentsDuRepas.map((aliment) => (
                   <View key={aliment.id} style={styles.itemCard}>
-                    <View style={styles.itemInfo}>
-                      <Text style={styles.itemName}>{aliment.aliment_nom}</Text>
-                      <Text style={styles.itemDetails}>
-                        {aliment.quantite}g | P: {aliment.proteines}g G: {aliment.glucides}g L: {aliment.lipides}g
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => setSelectedItemForEdit(aliment)}
+                    >
+                      <View style={styles.itemInfo}>
+                        <Text style={styles.itemName}>{aliment.aliment_nom}</Text>
+                        <Text style={styles.itemDetails}>
+                          {aliment.quantite}g | P: {aliment.proteines}g G: {aliment.glucides}g L: {aliment.lipides}g
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                    <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
                       <Text style={styles.caloriesText}>{aliment.calories} kcal</Text>
                       <TouchableOpacity onPress={() => supprimerElement(aliment.id)}>
                         <Text style={styles.deleteButton}>X</Text>
@@ -220,6 +227,13 @@ export default function HomeScreen() {
         onClose={() => setSelectedMealForSave(null)}
         items={selectedMealForSave?.items || []}
         defaultNom={selectedMealForSave ? `Mon ${selectedMealForSave.momentLabel}` : ''}
+      />
+
+      <EditQuantityModal
+        visible={!!selectedItemForEdit}
+        item={selectedItemForEdit}
+        dateString={dateString}
+        onClose={() => setSelectedItemForEdit(null)}
       />
     </View>
   );
