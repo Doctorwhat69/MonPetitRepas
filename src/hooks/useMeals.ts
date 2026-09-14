@@ -147,3 +147,19 @@ export function useSaveMealAsFavorite() {
     },
   });
 }
+
+// 5. Supprimer une recette favorie
+export function useDeleteMeal() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('repas_favoris').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myMeals'] });
+      queryClient.invalidateQueries({ queryKey: ['communityMeals'] });
+    },
+  });
+}

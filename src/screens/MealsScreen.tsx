@@ -1,175 +1,202 @@
-import React, { useState, useContext } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
+import React, { useState, useEffect, useContext } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, FlatList, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../context/ThemeContext';
 import { getGlobalStyles } from '../styles/globalStyles';
-import { useMyMeals, useCommunityMeals, useAddMealToJournal, RepasFavori } from '../hooks/useMeals';
+import { useMyMeals, useCommunityMeals, RepasFavori } from '../hooks/useMeals';
+import MealDetailModal from '../components/MealDetailModal';
+import { supabase } from '../services/supabase';
+
+type SortOption = 'recent' | 'calories_desc' | 'calories_asc' | 'proteines_desc';
 
 export default function MealsScreen() {
   const { theme } = useContext(ThemeContext);
   const globalStyles = getGlobalStyles(theme);
-  
-  const [activeTab, setActiveTab] = useState<'personnel' | 'communaute'>('personnel');
 
-  const { data: myMeals = [], isLoading: loadingMine } = useMyMeals();
+  const [activeTab, setActiveTab] = useState<'my' | 'community'>('my');
+  const [sortOption, setSortOption] = useState<SortOption>('recent');
+  const [selectedMeal, setSelectedMeal] = useState<RepasFavori | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id);
+    });
+  }, []);
+
+  const { data: myMeals = [], isLoading: loadingMy } = useMyMeals();
   const { data: communityMeals = [], isLoading: loadingCommunity } = useCommunityMeals();
-  const addMealMutation = useAddMealToJournal();
 
-  const handleLogMeal = (meal: RepasFavori) => {
-    // Date du jour au format YYYY-MM-DD
-    const today = new Date().toISOString().split('T')[0];
+  const rawList = activeTab === 'my' ? myMeals : communityMeals;
+  const isLoading = activeTab === 'my' ? loadingMy : loadingCommunity;
 
-    const confirmAction = () => {
-      addMealMutation.mutate(
-        { meal, date: today, moment: 'dejeuner' }, // Par défaut au déjeuner
-        {
-          onSuccess: () => {
-            const msg = `"${meal.nom}" a été ajouté à votre journal d'aujourd'hui !`;
-            if (Platform.OS === 'web') {
-              window.alert(msg);
-            } else {
-              Alert.alert('Succès', msg);
-            }
-          },
-        }
-      );
-    };
-
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Ajouter "${meal.nom}" à votre journal du jour ?`)) {
-        confirmAction();
-      }
-    } else {
-      Alert.alert('Ajouter le repas', `Voulez-vous ajouter "${meal.nom}" à votre journal du jour ?`, [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Ajouter', onPress: confirmAction },
-      ]);
-    }
-  };
-
-  const renderMealCard = (meal: RepasFavori) => (
-    <View key={meal.id} style={globalStyles.card}>
-      <View style={styles.cardHeader}>
-<Text style={[styles.mealTitle, { color: theme.text }]}>{meal.nom}</Text>
-      {meal.auteur_nom && <Text style={styles.author}>par {meal.auteur_nom}</Text>}
-      </View>
-
-      {meal.description ? (
-        <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 10 }}>{meal.description}</Text>
-      ) : null}
-
-      <View style={styles.macroBadgeRow}>
-        <Text style={[styles.macroBadge, { color: theme.primary }]}>{Math.round(meal.total_calories)} kcal</Text>
-        <Text style={styles.macroDetail}>P: {Math.round(meal.total_proteines)}g</Text>
-        <Text style={styles.macroDetail}>G: {Math.round(meal.total_glucides)}g</Text>
-        <Text style={styles.macroDetail}>L: {Math.round(meal.total_lipides)}g</Text>
-      </View>
-
-      <TouchableOpacity
-        style={[globalStyles.button, { flexDirection: 'row', gap: 6 }]}
-        onPress={() => handleLogMeal(meal)}
-        disabled={addMealMutation.isPending}
-      >
-        <Ionicons name="add-circle-outline" size={18} color="#FFF" />
-        <Text style={globalStyles.buttonText}>Ajouter au journal aujourd'hui</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const isLoading = activeTab === 'personnel' ? loadingMine : loadingCommunity;
-  const currentList = activeTab === 'personnel' ? myMeals : communityMeals;
+  // Application du tri
+  const sortedList = [...rawList].sort((a, b) => {
+    if (sortOption === 'calories_desc') return b.total_calories - a.total_calories;
+    if (sortOption === 'calories_asc') return a.total_calories - b.total_calories;
+    if (sortOption === 'proteines_desc') return b.total_proteines - a.total_proteines;
+    return 0; // 'recent' consigne l'ordre par défaut de Supabase
+  });
 
   return (
     <View style={globalStyles.container}>
-      <Text style={globalStyles.title}>Recettes & Repas</Text>
+      {/* Titre */}
+      <View style={styles.header}>
+        <Text style={globalStyles.title}>Recettes & Idées</Text>
+      </View>
 
-      <View style={[styles.tabContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      {/* Onglets : Mes Repas / Communauté */}
+      <View style={styles.tabsRow}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'personnel' && { backgroundColor: theme.primary }]}
-          onPress={() => setActiveTab('personnel')}
+          style={[styles.tabBtn, activeTab === 'my' && { borderBottomColor: theme.primary, borderBottomWidth: 3 }]}
+          onPress={() => setActiveTab('my')}
         >
-          <Text style={[styles.tabText, { color: activeTab === 'personnel' ? '#FFF' : theme.textSecondary }]}>
+          <Text style={{ color: activeTab === 'my' ? theme.primary : theme.textSecondary, fontWeight: 'bold' }}>
             Mes Repas
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'communaute' && { backgroundColor: theme.primary }]}
-          onPress={() => setActiveTab('communaute')}
+          style={[styles.tabBtn, activeTab === 'community' && { borderBottomColor: theme.primary, borderBottomWidth: 3 }]}
+          onPress={() => setActiveTab('community')}
         >
-          <Text style={[styles.tabText, { color: activeTab === 'communaute' ? '#FFF' : theme.textSecondary }]}>
+          <Text style={{ color: activeTab === 'community' ? theme.primary : theme.textSecondary, fontWeight: 'bold' }}>
             Communauté
           </Text>
         </TouchableOpacity>
       </View>
 
+      {/* Filtres de tri */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortContainer}>
+        <TouchableOpacity
+          style={[styles.chip, sortOption === 'recent' && { backgroundColor: theme.primary }]}
+          onPress={() => setSortOption('recent')}
+        >
+          <Text style={[styles.chipText, { color: sortOption === 'recent' ? '#FFF' : theme.textSecondary }]}>
+            Récents
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.chip, sortOption === 'calories_desc' && { backgroundColor: theme.primary }]}
+          onPress={() => setSortOption('calories_desc')}
+        >
+          <Text style={[styles.chipText, { color: sortOption === 'calories_desc' ? '#FFF' : theme.textSecondary }]}>
+            + Caloriques
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.chip, sortOption === 'calories_asc' && { backgroundColor: theme.primary }]}
+          onPress={() => setSortOption('calories_asc')}
+        >
+          <Text style={[styles.chipText, { color: sortOption === 'calories_asc' ? '#FFF' : theme.textSecondary }]}>
+            - Caloriques
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.chip, sortOption === 'proteines_desc' && { backgroundColor: theme.primary }]}
+          onPress={() => setSortOption('proteines_desc')}
+        >
+          <Text style={[styles.chipText, { color: sortOption === 'proteines_desc' ? '#FFF' : theme.textSecondary }]}>
+            + Protéinés
+          </Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Liste des recettes */}
       {isLoading ? (
         <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
+      ) : sortedList.length === 0 ? (
+        <View style={[globalStyles.card, { marginTop: 20 }]}>
+          <Text style={{ color: theme.textSecondary, textAlign: 'center' }}>
+            {activeTab === 'my'
+              ? 'Aucun repas sauvegardé dans vos favoris.'
+              : 'Aucun repas partagé par la communauté.'}
+          </Text>
+        </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
-          {currentList.length === 0 ? (
-            <View style={globalStyles.card}>
-              <Text style={{ color: theme.textSecondary, textAlign: 'center', marginVertical: 20 }}>
-                {activeTab === 'personnel'
-                  ? "Vous n'avez pas encore de repas enregistré."
-                  : 'Aucun repas public disponible.'}
-              </Text>
-            </View>
-          ) : (
-            currentList.map(renderMealCard)
+        <FlatList
+          data={sortedList}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: 80 }}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[globalStyles.card, { marginBottom: 12 }]}
+              onPress={() => setSelectedMeal(item)}
+            >
+              <View style={styles.rowBetween}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.text }}>{item.nom}</Text>
+                <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
+                  {Math.round(item.total_calories)} kcal
+                </Text>
+              </View>
+
+              {item.description ? (
+                <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 4 }}>
+                  {item.description}
+                </Text>
+              ) : null}
+
+              <View style={[styles.rowBetween, { marginTop: 10 }]}>
+                <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+                  P: {Math.round(item.total_proteines)}g | G: {Math.round(item.total_glucides)}g | L:{' '}
+                  {Math.round(item.total_lipides)}g
+                </Text>
+                <Ionicons name="eye-outline" size={18} color={theme.primary} />
+              </View>
+            </TouchableOpacity>
           )}
-        </ScrollView>
+        />
       )}
+
+      {/* Modale de détail et suppression */}
+      <MealDetailModal
+        visible={!!selectedMeal}
+        meal={selectedMeal}
+        currentUserId={currentUserId}
+        onClose={() => setSelectedMeal(null)}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  tabContainer: {
-    flexDirection: 'row',
-    borderRadius: 8,
-    borderWidth: 1,
-    marginBottom: 20,
-    padding: 4,
+  header: {
+    marginBottom: 10,
   },
-  tabButton: {
+  tabsRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#374151',
+    marginBottom: 12,
+  },
+  tabBtn: {
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 6,
   },
-  tabText: {
-    fontWeight: 'bold',
-    fontSize: 14,
+  sortContainer: {
+    maxHeight: 40,
+    marginBottom: 12,
   },
-  cardHeader: {
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#374151',
+    marginRight: 8,
+    justifyContent: 'center',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  rowBetween: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 6,
-  },
-  mealTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  
-  author: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontStyle: 'italic',
-  },
-  macroBadgeRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginVertical: 10,
-  },
-  macroBadge: {
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  macroDetail: {
-    color: '#9CA3AF',
-    fontSize: 12,
   },
 });
