@@ -6,6 +6,7 @@ import { getGlobalStyles } from '../styles/globalStyles';
 import ProfileModal from '../components/ProfileModal';
 import SearchFoodModal from '../components/SearchFoodModal';
 import SaveMealModal from '../components/SaveMealModal';
+import SelectMealModal from '../components/SelectMealModal';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import ProgressBar from '../components/ProgressBar';
 import { useJournal, useSupprimerConsommation } from '../hooks/useJournal';
@@ -36,6 +37,9 @@ export default function HomeScreen() {
   const [selectedMoment, setSelectedMoment] = useState<
     'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation' | null
   >(null);
+  const [selectedMomentForRecipe, setSelectedMomentForRecipe] = useState<
+    'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation' | null
+  >(null);
   const [selectedMealForSave, setSelectedMealForSave] = useState<{
     momentLabel: string;
     items: any[];
@@ -55,7 +59,7 @@ export default function HomeScreen() {
   selectedDateNormalized.setHours(0, 0, 0, 0);
   const isFuture = selectedDateNormalized > today;
 
-  // Objectifs dynamiques (remplace les valeurs en dur par le profil Supabase)
+  // Objectifs dynamiques (issues du profil Supabase)
   const objectifs = {
     calories: profile?.calories_cible || 2000,
     proteines: profile?.proteines_cible || 140,
@@ -166,12 +170,28 @@ export default function HomeScreen() {
                   </View>
                 ))}
 
-                <TouchableOpacity
-                  style={[styles.card, { alignItems: 'center', backgroundColor: 'transparent', borderStyle: 'dashed' }]}
-                  onPress={() => setSelectedMoment(section.key as any)}
-                >
-                  <Text style={{ color: theme.primary, fontWeight: 'bold' }}>+ Ajouter un aliment</Text>
-                </TouchableOpacity>
+                {/* Boutons d'ajout côte à côte */}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.card,
+                      { flex: 1, alignItems: 'center', backgroundColor: 'transparent', borderStyle: 'dashed', marginBottom: 0 },
+                    ]}
+                    onPress={() => setSelectedMoment(section.key as any)}
+                  >
+                    <Text style={{ color: theme.primary, fontWeight: 'bold' }}>+ Aliment</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.card,
+                      { flex: 1, alignItems: 'center', backgroundColor: 'transparent', borderStyle: 'dashed', marginBottom: 0 },
+                    ]}
+                    onPress={() => setSelectedMomentForRecipe(section.key as any)}
+                  >
+                    <Text style={{ color: theme.primary, fontWeight: 'bold' }}>+ Recette</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           })
@@ -186,6 +206,13 @@ export default function HomeScreen() {
         moment={selectedMoment}
         dateString={dateString}
         onClose={() => setSelectedMoment(null)}
+      />
+
+      <SelectMealModal
+        visible={selectedMomentForRecipe !== null}
+        moment={selectedMomentForRecipe}
+        dateString={dateString}
+        onClose={() => setSelectedMomentForRecipe(null)}
       />
 
       <SaveMealModal

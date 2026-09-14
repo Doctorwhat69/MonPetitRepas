@@ -10,7 +10,7 @@ export interface RepasFavori {
   is_public: boolean;
   items: Array<{
     aliment_nom: string;
-    quantite_g: number;
+    quantite: number;
     calories: number;
     proteines: number;
     glucides: number;
@@ -69,29 +69,31 @@ export function useAddMealToJournal() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
 
-      // On prépare les lignes pour journal_consommations
-      const entries = meal.items.map((item) => ({
+      const entries = meal.items.map((item: any) => ({
         user_id: user.id,
         date_consommation: date,
         moment,
         aliment_nom: item.aliment_nom,
-        quantite_g: item.quantite_g,
-        calories: item.calories,
-        proteines: item.proteines,
-        glucides: item.glucides,
-        lipides: item.lipides,
+        quantite: Number(item.quantite || item.quantite_g || 100),
+        calories: Number(item.calories || 0),
+        proteines: Number(item.proteines || 0),
+        glucides: Number(item.glucides || 0),
+        lipides: Number(item.lipides || 0),
       }));
 
       const { error } = await supabase.from('journal_consommations').insert(entries);
-      if (error) throw error;
+      if (error) {
+        console.error('Erreur Supabase lors de l\'ajout du repas :', error);
+        throw error;
+      }
     },
     onSuccess: (_, variables) => {
-      // Invalide le cache du journal pour recharger automatiquement le journal du jour
       queryClient.invalidateQueries({ queryKey: ['journal', variables.date] });
     },
   });
 }
 
+// 4. Sauvegarder un ensemble d'aliments comme Repas Favori
 export function useSaveMealAsFavorite() {
   const queryClient = useQueryClient();
 
@@ -105,29 +107,31 @@ export function useSaveMealAsFavorite() {
       nom: string;
       description?: string;
       is_public: boolean;
-      items: Array<{
-        aliment_nom: string;
-        quantite_g: number;
-        calories: number;
-        proteines: number;
-        glucides: number;
-        lipides: number;
-      }>;
+      items: Array<any>;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
 
-      const total_calories = items.reduce((acc, i) => acc + Number(i.calories || 0), 0);
-      const total_proteines = items.reduce((acc, i) => acc + Number(i.proteines || 0), 0);
-      const total_glucides = items.reduce((acc, i) => acc + Number(i.glucides || 0), 0);
-      const total_lipides = items.reduce((acc, i) => acc + Number(i.lipides || 0), 0);
+      const cleanedItems = items.map((i) => ({
+        aliment_nom: i.aliment_nom,
+        quantite: Number(i.quantite || i.quantite_g || 100),
+        calories: Number(i.calories || 0),
+        proteines: Number(i.proteines || 0),
+        glucides: Number(i.glucides || 0),
+        lipides: Number(i.lipides || 0),
+      }));
+
+      const total_calories = cleanedItems.reduce((acc, i) => acc + i.calories, 0);
+      const total_proteines = cleanedItems.reduce((acc, i) => acc + i.proteines, 0);
+      const total_glucides = cleanedItems.reduce((acc, i) => acc + i.glucides, 0);
+      const total_lipides = cleanedItems.reduce((acc, i) => acc + i.lipides, 0);
 
       const { error } = await supabase.from('repas_favoris').insert({
         user_id: user.id,
         nom,
         description,
         is_public,
-        items,
+        items: cleanedItems,
         total_calories,
         total_proteines,
         total_glucides,
