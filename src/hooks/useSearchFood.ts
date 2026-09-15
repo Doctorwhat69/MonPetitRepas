@@ -9,6 +9,8 @@ export interface AlimentItem {
   glucides: number;
   lipides: number;
   isCustom?: boolean;
+  unite_nom?: string;    // ex: "Oeuf", "Tranche", "Bol"
+  unite_poids_g?: number; // ex: 50, 35, 250
 }
 
 export function useSearchFood(query: string) {

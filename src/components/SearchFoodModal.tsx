@@ -1,20 +1,11 @@
 import React, { useState, useContext } from 'react';
-import {
-  View,
-  Text,
-  Modal,
-  TextInput,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, Modal, TextInput, TouchableOpacity, FlatList, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../context/ThemeContext';
 import { getGlobalStyles } from '../styles/globalStyles';
 import { useSearchFood, AlimentItem } from '../hooks/useSearchFood';
 import { useAjouterConsommation } from '../hooks/useJournal';
-import AddCustomFoodModal from './AddCustomFoodModal';
+import CustomFoodModal from './AddCustomFoodModal';
 
 interface Props {
   visible: boolean;
@@ -29,48 +20,64 @@ export default function SearchFoodModal({ visible, moment, dateString, onClose }
 
   const [search, setSearch] = useState('');
   const [selectedItem, setSelectedItem] = useState<AlimentItem | null>(null);
-  const [quantiteG, setQuantiteG] = useState('100');
-  const [showAddCustom, setShowAddCustom] = useState(false);
+  const [showCustomModal, setShowCustomModal] = useState(false);
 
-  const { data: results = [], isLoading, refetch } = useSearchFood(search);
+  // Gestion de la quantité (Grammes vs Unités)
+  const [mode, setMode] = useState<'grammes' | 'unite'>('grammes');
+  const [inputValue, setInputValue] = useState('100');
+
+  const { data: searchResults = [], isLoading } = useSearchFood(search);
   const ajouterMutation = useAjouterConsommation();
 
-  const handleSelect = (item: AlimentItem) => {
+  const handleSelectFood = (item: AlimentItem) => {
     setSelectedItem(item);
+    if (item.unite_poids_g) {
+      setMode('unite');
+      setInputValue('1');
+    } else {
+      setMode('grammes');
+      setInputValue('100');
+    }
   };
 
- const handleValidateAdd = () => {
-  if (!selectedItem || !moment) return;
+  const handleValidateAdd = () => {
+    if (!selectedItem || !moment) return;
 
-  const g = parseFloat(quantiteG) || 100;
-  const ratio = g / 100;
+    const parsedInput = parseFloat(inputValue.replace(',', '.')) || 0;
+    if (parsedInput <= 0) return;
 
-  ajouterMutation.mutate(
-    {
-      date_consommation: dateString,
-      moment,
-      aliment_nom: selectedItem.nom,
-      quantite: g,
-      calories: Math.round(selectedItem.calories * ratio),
-      proteines: Number((selectedItem.proteines * ratio).toFixed(1)),
-      glucides: Number((selectedItem.glucides * ratio).toFixed(1)),
-      lipides: Number((selectedItem.lipides * ratio).toFixed(1)),
-    },
-    {
-      onSuccess: () => {
-        setSelectedItem(null);
-        setSearch('');
-        setQuantiteG('100');
-        onClose();
+    const finalGrams =
+      mode === 'unite' && selectedItem.unite_poids_g
+        ? parsedInput * selectedItem.unite_poids_g
+        : parsedInput;
+
+    const ratio = finalGrams / 100;
+
+    ajouterMutation.mutate(
+      {
+        date_consommation: dateString,
+        moment,
+        aliment_nom: selectedItem.nom,
+        quantite: finalGrams,
+        calories: Math.round(selectedItem.calories * ratio),
+        proteines: Number((selectedItem.proteines * ratio).toFixed(1)),
+        glucides: Number((selectedItem.glucides * ratio).toFixed(1)),
+        lipides: Number((selectedItem.lipides * ratio).toFixed(1)),
       },
-    }
-  );
-};
+      {
+        onSuccess: () => {
+          setSelectedItem(null);
+          setSearch('');
+          setInputValue('100');
+          onClose();
+        },
+      }
+    );
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false}>
-      <View style={globalStyles.container}>
-        {/* En-tête */}
+      <View style={[globalStyles.container, { paddingTop: 50 }]}>
         <View style={styles.header}>
           <Text style={globalStyles.title}>Ajouter un aliment</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -78,12 +85,11 @@ export default function SearchFoodModal({ visible, moment, dateString, onClose }
           </TouchableOpacity>
         </View>
 
-        {/* Barre de recherche */}
         <View style={[styles.searchBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <Ionicons name="search" size={20} color={theme.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: theme.text }]}
-            placeholder="Rechercher (ex: Flocons d'avoine)..."
+            placeholder="Rechercher un aliment..."
             placeholderTextColor={theme.textSecondary}
             value={search}
             onChangeText={setSearch}
@@ -91,95 +97,135 @@ export default function SearchFoodModal({ visible, moment, dateString, onClose }
           />
         </View>
 
-        {/* Bouton création d'un aliment personnalisé */}
-        <TouchableOpacity
-          style={[styles.createCustomBtn, { borderColor: theme.primary }]}
-          onPress={() => setShowAddCustom(true)}
-        >
-          <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
-          <Text style={{ color: theme.primary, fontWeight: 'bold', fontSize: 14 }}>
-            Aliment introuvable ? Créer un aliment
-          </Text>
-        </TouchableOpacity>
-
-        {/* Écran de saisie du grammage si aliment sélectionné */}
+        {/* SI UN ALIMENT EST SÉLECTIONNÉ */}
         {selectedItem ? (
-          <View style={[globalStyles.card, { marginTop: 15 }]}>
-            <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.text, marginBottom: 8 }}>
+          <View style={[globalStyles.card, { marginTop: 20 }]}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.text, marginBottom: 15 }}>
               {selectedItem.nom}
             </Text>
-            <Text style={{ color: theme.textSecondary, marginBottom: 12 }}>
-              Valeurs pour 100g : {selectedItem.calories} kcal | P: {selectedItem.proteines}g G: {selectedItem.glucides}g L: {selectedItem.lipides}g
-            </Text>
 
-            <Text style={{ color: theme.text, marginBottom: 6, fontWeight: '600' }}>Quantité consommée (en g) :</Text>
-            <TextInput
-              style={[styles.gramInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
-              keyboardType="numeric"
-              value={quantiteG}
-              onChangeText={setQuantiteG}
-            />
+            {/* Toggle Unité / Grammes (Visible uniquement si une unité existe) */}
+            {selectedItem.unite_poids_g && (
+              <View style={[styles.toggleContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, mode === 'unite' && { backgroundColor: theme.primary }]}
+                  onPress={() => {
+                    setMode('unite');
+                    setInputValue('1');
+                  }}
+                >
+                  <Text style={{ color: mode === 'unite' ? '#FFF' : theme.textSecondary, fontWeight: 'bold' }}>
+                    {selectedItem.unite_nom || 'Portion'} ({selectedItem.unite_poids_g}g)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.toggleBtn, mode === 'grammes' && { backgroundColor: theme.primary }]}
+                  onPress={() => {
+                    setMode('grammes');
+                    setInputValue('100');
+                  }}
+                >
+                  <Text style={{ color: mode === 'grammes' ? '#FFF' : theme.textSecondary, fontWeight: 'bold' }}>
+                    Grammes
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 15 }}>
-              <TouchableOpacity
-                style={[styles.btnAction, { backgroundColor: theme.border }]}
-                onPress={() => setSelectedItem(null)}
-              >
-                <Text style={{ color: theme.text }}>Retour</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[globalStyles.button, { marginTop: 0, flex: 1 }]}
-                onPress={handleValidateAdd}
-                disabled={ajouterMutation.isPending}
-              >
-                {ajouterMutation.isPending ? (
-                  <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                  <Text style={globalStyles.buttonText}>Valider l'ajout</Text>
-                )}
-              </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15, marginTop: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.textSecondary, marginBottom: 5 }}>
+                  {mode === 'unite' ? `Nombre de ${selectedItem.unite_nom || 'portions'}` : 'Quantité (g)'}
+                </Text>
+                <TextInput
+                  style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+                  keyboardType="numeric"
+                  value={inputValue}
+                  onChangeText={setInputValue}
+                />
+              </View>
             </View>
+
+            <TouchableOpacity
+              style={[globalStyles.button, { marginTop: 20 }]}
+              onPress={handleValidateAdd}
+              disabled={ajouterMutation.isPending}
+            >
+              {ajouterMutation.isPending ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={globalStyles.buttonText}>Valider l'ajout</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={{ marginTop: 15, alignItems: 'center' }} onPress={() => setSelectedItem(null)}>
+              <Text style={{ color: theme.textSecondary }}>Changer d'aliment</Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          /* Liste des résultats de recherche */
-          <View style={{ flex: 1, marginTop: 10 }}>
-            {isLoading && <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 20 }} />}
-
-            <FlatList
-              data={results}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.itemRow, { borderBottomColor: theme.border }]}
-                  onPress={() => handleSelect(item)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ color: theme.text, fontWeight: '600', fontSize: 15 }}>{item.nom}</Text>
-                      {item.isCustom && (
-                        <View style={[styles.badgeCustom, { backgroundColor: theme.primary }]}>
-                          <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>Perso</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 2 }}>
-                      {item.calories} kcal/100g — P: {item.proteines}g G: {item.glucides}g L: {item.lipides}g
+          /* LISTE DES RÉSULTATS DE RECHERCHE */
+          <FlatList
+            data={searchResults}
+            keyExtractor={(item) => item.id}
+            style={{ marginTop: 20 }}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              search.length > 2 && !isLoading ? (
+                <View style={{ alignItems: 'center', marginTop: 20 }}>
+                  <Text style={{ color: theme.textSecondary, marginBottom: 12 }}>
+                    Aliment introuvable dans la base CIQUAL
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.customBtn, { borderColor: theme.primary }]}
+                    onPress={() => setShowCustomModal(true)}
+                  >
+                    <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
+                    <Text style={{ color: theme.primary, fontWeight: 'bold' }}>
+                      Créer un aliment personnalisé
                     </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              ) : isLoading ? (
+                <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 20 }} />
+              ) : null
+            }
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[styles.resultItem, { borderBottomColor: theme.border }]}
+                onPress={() => handleSelectFood(item)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontWeight: 'bold' }}>{item.nom}</Text>
+                  <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
+                    {item.calories} kcal / 100g
+                    {item.unite_poids_g ? ` • 1 ${item.unite_nom || 'portion'} = ${item.unite_poids_g}g` : ''}
+                  </Text>
+                </View>
+                <Ionicons name="add-circle-outline" size={24} color={theme.primary} />
+              </TouchableOpacity>
+            )}
+            ListFooterComponent={
+              searchResults.length > 0 ? (
+                <TouchableOpacity
+                  style={[styles.customBtn, { borderColor: theme.border, marginTop: 15, marginBottom: 30 }]}
+                  onPress={() => setShowCustomModal(true)}
+                >
+                  <Ionicons name="add-outline" size={18} color={theme.textSecondary} />
+                  <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
+                    Aliment manquant ? Créer un aliment personnalisé
+                  </Text>
                 </TouchableOpacity>
-              )}
-            />
-          </View>
+              ) : null
+            }
+          />
         )}
 
-        {/* Modale de création d'aliment manquant */}
-        <AddCustomFoodModal
-          visible={showAddCustom}
-          onClose={() => setShowAddCustom(false)}
+        {/* Modale de création d'aliment sur mesure */}
+        <CustomFoodModal
+          visible={showCustomModal}
+          onClose={() => setShowCustomModal(false)}
           onSuccess={() => {
-            refetch();
+            setShowCustomModal(false);
           }}
         />
       </View>
@@ -192,26 +238,45 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 20,
   },
-  closeBtn: {
-    padding: 6,
-  },
+  closeBtn: { padding: 4 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    height: 46,
-    marginBottom: 10,
+    height: 50,
   },
-  searchInput: {
+  searchInput: { flex: 1, marginLeft: 10, fontSize: 16 },
+  resultItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 15,
+    overflow: 'hidden',
+  },
+  toggleBtn: {
     flex: 1,
-    marginLeft: 8,
-    fontSize: 15,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
-  createCustomBtn: {
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  customBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -219,32 +284,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
     borderRadius: 10,
-    paddingVertical: 10,
-    marginBottom: 10,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  badgeCustom: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  gramInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  btnAction: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
