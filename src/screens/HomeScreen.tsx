@@ -8,6 +8,7 @@ import SearchFoodModal from '../components/SearchFoodModal';
 import SaveMealModal from '../components/SaveMealModal';
 import SelectMealModal from '../components/SelectMealModal';
 import EditQuantityModal from '../components/EditQuantityModal';
+import MealGroupCard from '../components/MealGroupCard';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import ProgressBar from '../components/ProgressBar';
 import { useJournal, useSupprimerConsommation } from '../hooks/useJournal';
@@ -155,27 +156,64 @@ export default function HomeScreen() {
                   </View>
                 </View>
 
-                {alimentsDuRepas.map((aliment) => (
-                  <View key={aliment.id} style={styles.itemCard}>
-                    <TouchableOpacity
-                      style={{ flex: 1 }}
-                      onPress={() => setSelectedItemForEdit(aliment)}
-                    >
-                      <View style={styles.itemInfo}>
-                        <Text style={styles.itemName}>{aliment.aliment_nom}</Text>
-                        <Text style={styles.itemDetails}>
-                          {aliment.quantite}g | P: {aliment.proteines}g G: {aliment.glucides}g L: {aliment.lipides}g
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                    <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                      <Text style={styles.caloriesText}>{aliment.calories} kcal</Text>
-                      <TouchableOpacity onPress={() => supprimerElement(aliment.id)}>
-                        <Text style={styles.deleteButton}>X</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
+                {/* Structure de regroupement des aliments */}
+                {(() => {
+                  const groupesMap = new Map<string, { nom: string; items: any[] }>();
+                  const isoles: any[] = [];
+
+                  alimentsDuRepas.forEach((aliment) => {
+                    if (aliment.repas_groupe_id) {
+                      if (!groupesMap.has(aliment.repas_groupe_id)) {
+                        groupesMap.set(aliment.repas_groupe_id, {
+                          nom: aliment.repas_nom || 'Plat composé',
+                          items: [],
+                        });
+                      }
+                      groupesMap.get(aliment.repas_groupe_id)!.items.push(aliment);
+                    } else {
+                      isoles.push(aliment);
+                    }
+                  });
+
+                  return (
+                    <>
+                      {/* Cartes de plats groupés */}
+                      {Array.from(groupesMap.entries()).map(([groupeId, groupe]) => (
+                        <MealGroupCard
+                          key={groupeId}
+                          repasGroupeId={groupeId}
+                          nom={groupe.nom}
+                          items={groupe.items}
+                          dateString={dateString}
+                          onEditItem={(aliment) => setSelectedItemForEdit(aliment)}
+                        />
+                      ))}
+
+                      {/* Aliments isolés */}
+                      {isoles.map((aliment) => (
+                        <View key={aliment.id} style={styles.itemCard}>
+                          <TouchableOpacity
+                            style={{ flex: 1 }}
+                            onPress={() => setSelectedItemForEdit(aliment)}
+                          >
+                            <View style={styles.itemInfo}>
+                              <Text style={styles.itemName}>{aliment.aliment_nom}</Text>
+                              <Text style={styles.itemDetails}>
+                                {aliment.quantite}g | P: {aliment.proteines}g G: {aliment.glucides}g L: {aliment.lipides}g
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                          <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                            <Text style={styles.caloriesText}>{aliment.calories} kcal</Text>
+                            <TouchableOpacity onPress={() => supprimerElement(aliment.id)}>
+                              <Text style={styles.deleteButton}>X</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </>
+                  );
+                })()}
 
                 {/* Boutons d'ajout côte à côte */}
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>

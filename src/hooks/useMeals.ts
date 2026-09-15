@@ -60,7 +60,7 @@ export function useCommunityMeals() {
   });
 }
 
-// 3. Injecter tous les aliments d'un repas dans le journal du jour
+// 3. Injecter tous les aliments d'un repas dans le journal du jour (sous forme de groupe)
 export function useAddMealToJournal() {
   const queryClient = useQueryClient();
 
@@ -68,6 +68,9 @@ export function useAddMealToJournal() {
     mutationFn: async ({ meal, date, moment }: { meal: RepasFavori; date: string; moment: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
+
+      // Génération d'un ID de groupe unique pour ce plat
+      const repasGroupeId = crypto.randomUUID();
 
       const entries = meal.items.map((item: any) => ({
         user_id: user.id,
@@ -79,6 +82,10 @@ export function useAddMealToJournal() {
         proteines: Number(item.proteines || 0),
         glucides: Number(item.glucides || 0),
         lipides: Number(item.lipides || 0),
+        // Nouvelles propriétés de regroupement :
+        repas_groupe_id: repasGroupeId,
+        repas_nom: meal.nom,
+        portion_factor: 1.0,
       }));
 
       const { error } = await supabase.from('journal_consommations').insert(entries);
