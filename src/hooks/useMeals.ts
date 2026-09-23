@@ -10,6 +10,7 @@ export interface RepasFavori {
   description?: string;
   auteur_nom?: string;
   is_public: boolean;
+  moment_cible?: 'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation' | string;
   items: Array<{
     aliment_nom: string;
     quantite: number;
@@ -62,7 +63,7 @@ export function useCommunityMeals() {
   });
 }
 
-// 3. Injecter tous les aliments d'un repas dans le journal du jour (sous forme de groupe)
+// 3. Injecter tous les aliments d'un repas dans le journal du jour
 export function useAddMealToJournal() {
   const queryClient = useQueryClient();
 
@@ -71,7 +72,6 @@ export function useAddMealToJournal() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
 
-      // Génération d'un ID de groupe unique pour ce plat
       const repasGroupeId = crypto.randomUUID();
 
       const entries = meal.items.map((item: any) => ({
@@ -84,7 +84,6 @@ export function useAddMealToJournal() {
         proteines: Number(item.proteines || 0),
         glucides: Number(item.glucides || 0),
         lipides: Number(item.lipides || 0),
-        // Nouvelles propriétés de regroupement :
         repas_groupe_id: repasGroupeId,
         repas_nom: meal.nom,
         portion_factor: 1.0,
@@ -112,11 +111,13 @@ export function useSaveMealAsFavorite() {
       description,
       is_public,
       items,
+      moment_cible,
     }: {
       nom: string;
       description?: string;
       is_public: boolean;
       items: Array<any>;
+      moment_cible?: string;
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
@@ -135,20 +136,40 @@ export function useSaveMealAsFavorite() {
       const total_glucides = cleanedItems.reduce((acc, i) => acc + i.glucides, 0);
       const total_lipides = cleanedItems.reduce((acc, i) => acc + i.lipides, 0);
 
-      const { error } = await supabase.from('repas_favoris').insert({
-        user_id: user.id,
-        nom,
-        description,
-        is_public,
-        items: cleanedItems,
-        total_calories,
-        total_proteines,
-        total_glucides,
-        total_lipides,
-        auteur_nom: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Anonyme',
-      });
+      const { data: repasCreated, error } = await supabase
+        .from('repas_favoris')
+        .insert({
+          user_id: user.id,
+          nom,
+          description,
+          is_public,
+          moment_cible,
+          items: cleanedItems,
+          total_calories,
+          total_proteines,
+          total_glucides,
+          total_lipides,
+          auteur_nom: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Anonyme',
+        })
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Insertion dans la table relationnelle repas_favoris_aliments pour l'algorithme glouton
+      if (repasCreated && cleanedItems.length > 0) {
+        const alimentsEntries = cleanedItems.map((item) => ({
+          repas_favori_id: repasCreated.id,
+          aliment_nom: item.aliment_nom,
+          quantite: item.quantite,
+          calories: item.calories,
+          proteines: item.proteines,
+          glucides: item.glucides,
+          lipides: item.lipides,
+        }));
+
+        await supabase.from('repas_favoris_aliments').insert(alimentsEntries);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myMeals'] });
@@ -173,6 +194,7 @@ export function useDeleteMeal() {
   });
 }
 
+// 6. Générer automatiquement le menu de la semaine
 export function useGenererSemaine() {
   const queryClient = useQueryClient();
   const { profile } = useProfile();
@@ -183,7 +205,6 @@ export function useGenererSemaine() {
       if (!user) throw new Error('Utilisateur non connecté');
       if (!profile) throw new Error('Profil introuvable');
 
-      // 1. Récupérer tous les repas favoris de l'utilisateur avec leurs aliments
       const { data: repasData, error: repasErr } = await supabase
         .from('repas_favoris')
         .select(`
@@ -203,14 +224,12 @@ export function useGenererSemaine() {
 
       if (repasErr) throw repasErr;
 
-      // 2. Formater les données pour l'algorithme
       const recettesDisponibles: RecettePlan[] = (repasData || []).map((r) => {
         const items = r.repas_favoris_aliments || [];
         return {
           id: r.id,
           nom: r.nom,
-          // Si le repas n'a pas de moment cible défini, on le met en "diner" par défaut pour éviter un crash
-          moment: r.moment_cible || 'diner', 
+          moment: r.moment_cible || 'diner',
           calories: items.reduce((acc: number, item: any) => acc + Number(item.calories || 0), 0),
           proteines: items.reduce((acc: number, item: any) => acc + Number(item.proteines || 0), 0),
           glucides: items.reduce((acc: number, item: any) => acc + Number(item.glucides || 0), 0),
@@ -233,19 +252,16 @@ export function useGenererSemaine() {
       const planningSemaine = [];
       const datesToInvalidate: string[] = [];
 
-      // 3. Générer 7 jours (Lundi à Dimanche)
       for (let i = 0; i < 7; i++) {
         const dateJour = new Date(mondayDate);
         dateJour.setDate(mondayDate.getDate() + i);
         const dateStr = dateJour.toISOString().split('T')[0];
         datesToInvalidate.push(dateStr);
 
-        // Appel de l'algorithme glouton
         const journeeGeneree = genererJourneeGlouton(objectif, recettesDisponibles);
 
-        // 4. Préparer les données pour l'insertion en base
         for (const recette of journeeGeneree.repas) {
-          const repasGroupeId = crypto.randomUUID(); // Grouper la recette
+          const repasGroupeId = crypto.randomUUID();
 
           const entries = recette.items.map((item) => ({
             user_id: user.id,
@@ -266,20 +282,18 @@ export function useGenererSemaine() {
         }
       }
 
-      // 5. Nettoyer la semaine future avant d'insérer (pour éviter les doublons si l'utilisateur reclique sur "Générer")
       const startStr = datesToInvalidate[0];
       const endStr = datesToInvalidate[6];
-      
+
       const { error: deleteErr } = await supabase
         .from('journal_consommations')
         .delete()
         .eq('user_id', user.id)
         .gte('date_consommation', startStr)
         .lte('date_consommation', endStr);
-        
-      if(deleteErr) throw deleteErr;
 
-      // 6. Insérer le nouveau planning en une seule grosse requête
+      if (deleteErr) throw deleteErr;
+
       const { error: insertErr } = await supabase
         .from('journal_consommations')
         .insert(planningSemaine);
@@ -289,11 +303,9 @@ export function useGenererSemaine() {
       return datesToInvalidate;
     },
     onSuccess: (datesToInvalidate) => {
-      // Invalider le cache pour que l'UI se mette à jour instantanément
-      datesToInvalidate.forEach(dateStr => {
+      datesToInvalidate.forEach((dateStr) => {
         queryClient.invalidateQueries({ queryKey: ['journal', dateStr] });
       });
-      // Invalider les stats de la semaine
       queryClient.invalidateQueries({ queryKey: ['stats'] });
     },
   });
