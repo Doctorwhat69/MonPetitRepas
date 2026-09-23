@@ -1,12 +1,23 @@
 import React, { useState, useContext } from 'react';
-import { View, Text, TextInput, Button, TouchableOpacity } from 'react-native';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  ActivityIndicator, 
+  KeyboardAvoidingView, 
+  Platform,
+  StyleSheet
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../services/supabase';
 import { ThemeContext } from '../context/ThemeContext';
 import { getGlobalStyles } from '../styles/globalStyles'; 
 
 export default function AuthScreen() {
   const { theme } = useContext(ThemeContext);
-  const styles = getGlobalStyles(theme);
+  const globalStyles = getGlobalStyles(theme);
+  
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,7 +47,7 @@ export default function AuthScreen() {
         setMessage({ text: 'Compte créé et connecté !', isError: false });
       } else {
         setMessage({ 
-          text: 'Compte créé ! Vérifie tes e-mails pour confirmer ton compte, ou désactive la confirmation dans Supabase.', 
+          text: 'Compte créé ! Vérifie tes e-mails pour confirmer ton compte.', 
           isError: false 
         });
       }
@@ -51,49 +62,106 @@ export default function AuthScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{isSignUp ? 'Créer un compte' : 'Connexion'}</Text>
-
-      {message && (
-        <View style={[styles.messageBox, message.isError ? styles.errorBox : styles.successBox]}>
-          <Text style={[styles.messageText, message.isError ? styles.errorText : styles.successText]}>
-            {message.text}
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      style={globalStyles.container}
+    >
+      <View style={styles.innerContainer}>
+        
+        {/* En-tête / Logo */}
+        <View style={styles.logoSection}>
+          <View style={[styles.iconCircle, { backgroundColor: theme.primary }]}>
+            <Ionicons name="leaf" size={40} color="#FFF" />
+          </View>
+          <Text style={[globalStyles.title, { fontSize: 26, marginTop: 16, marginBottom: 4 }]}>
+            MonPetitRepas
+          </Text>
+          <Text style={{ color: theme.textSecondary, fontSize: 14, textAlign: 'center', marginBottom: 30 }}>
+            {isSignUp ? 'Créez votre compte pour commencer.' : 'Heureux de vous revoir !'}
           </Text>
         </View>
-      )}
 
-      <TextInput
-        style={styles.input}
-        placeholder="Adresse e-mail"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
+        {/* Message d'erreur ou succès */}
+        {message && (
+          <View style={[globalStyles.messageBox, message.isError ? globalStyles.errorBox : globalStyles.successBox]}>
+            <Text style={[globalStyles.messageText, message.isError ? globalStyles.errorText : globalStyles.successText]}>
+              {message.text}
+            </Text>
+          </View>
+        )}
 
-      <TextInput
-        style={styles.input}
-        placeholder="Mot de passe (6 caractères min.)"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
+        {/* Formulaire */}
+        <Text style={globalStyles.label}>Adresse e-mail</Text>
+        <TextInput
+          style={[globalStyles.input, { borderColor: theme.border, color: theme.text }]}
+          placeholder="votre@email.com"
+          placeholderTextColor={theme.textSecondary}
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
 
-      <Button
-        title={loading ? 'Chargement...' : isSignUp ? "S'inscrire" : 'Se connecter'}
-        onPress={handleAuth}
-        disabled={loading}
-      />
+        <Text style={[globalStyles.label, { marginTop: 8 }]}>Mot de passe</Text>
+        <TextInput
+          style={[globalStyles.input, { borderColor: theme.border, color: theme.text }]}
+          placeholder="6 caractères min."
+          placeholderTextColor={theme.textSecondary}
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
 
-      <TouchableOpacity 
-        onPress={() => { setIsSignUp(!isSignUp); setMessage(null); }} 
-        style={styles.toggleContainer}
-      >
-        <Text style={styles.toggleText}>
-          {isSignUp ? 'Déjà un compte ? Se connecter' : "Pas encore de compte ? S'inscrire"}
-        </Text>
-      </TouchableOpacity>
-    </View>
+        {/* Bouton d'action personnalisé */}
+        <TouchableOpacity 
+          style={[globalStyles.button, { marginTop: 20 }]} 
+          onPress={handleAuth} 
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={globalStyles.buttonText}>
+              {isSignUp ? "S'inscrire" : 'Se connecter'}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Bouton bascule (Connexion <-> Inscription) */}
+        <TouchableOpacity 
+          onPress={() => { setIsSignUp(!isSignUp); setMessage(null); }} 
+          style={globalStyles.toggleContainer}
+        >
+          <Text style={globalStyles.toggleText}>
+            {isSignUp ? 'Déjà un compte ? Se connecter' : "Pas encore de compte ? S'inscrire"}
+          </Text>
+        </TouchableOpacity>
+
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
+const styles = StyleSheet.create({
+  innerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: 40, // Remonte légèrement le contenu pour l'esthétique
+  },
+  logoSection: {
+    alignItems: 'center',
+  },
+  iconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // Ombre douce pour l'icône
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  }
+});

@@ -4,13 +4,19 @@ import { useColorScheme } from 'react-native';
 export const themeClair = {
   background: '#F8F9FA',
   card: '#FFFFFF',
-  text: '#212121',
-  textSecondary: '#666666',
-  border: '#E0E0E0',
-  primary: '#00BCD4',       // Cyan (30 %)
-  primaryDark: '#00838F',
-  accent: '#FF6F61',        // Corail Orange (10 %)
-  danger: '#D32F2F',
+  text: '#1F2937',
+  textSecondary: '#6B7280',
+  border: '#E5E7EB',
+  primary: '#2D8C60',       // Vert Figma principal
+  primaryDark: '#1E6142',
+  accent: '#FF6F61',        // Corail Orange
+  danger: '#EF4444',
+  
+  // NOUVEAU : Couleurs des macros du design Figma
+  protein: '#2D8C60',      // Vert
+  carbs: '#E58E26',        // Orange / Jaune
+  fat: '#E55039',          // Rouge / Corail
+  
   isDark: false,
 };
 
@@ -20,10 +26,15 @@ export const themeSombre = {
   text: '#F5F5F5',
   textSecondary: '#AAAAAA',
   border: '#333333',
-  primary: '#00BCD4',       
-  primaryDark: '#00838F',
+  primary: '#34A853',       // Vert lisible en mode sombre
+  primaryDark: '#2D8C60',
   accent: '#FF6F61',
   danger: '#FF5252',
+  
+  protein: '#34A853',
+  carbs: '#F39C12',
+  fat: '#FF5252',
+  
   isDark: true,
 };
 

@@ -8,6 +8,9 @@ export interface UserProfile extends ProfileData {
   proteines_cible: number;
   glucides_cible: number;
   lipides_cible: number;
+  prenom?: string;
+  avatar_url?: string;
+  email:string;
 }
 
 export function useProfile() {

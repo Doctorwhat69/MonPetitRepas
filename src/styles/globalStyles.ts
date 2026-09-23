@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { Theme } from '../context/ThemeContext';
 
 /**
@@ -13,8 +13,8 @@ export const getGlobalStyles = (theme: Theme) =>
     container: {
       flex: 1,
       backgroundColor: theme.background,
-      padding: 16,
-      paddingTop: 40,
+      paddingHorizontal: 16,
+      paddingTop: 50,
     },
     header: {
       flexDirection: 'row',
@@ -28,15 +28,30 @@ export const getGlobalStyles = (theme: Theme) =>
       flexWrap: 'wrap',
     },
     content: {
-      gap: 10,
+      gap: 12,
     },
+    // Carte style Figma avec arrondis prononcés et ombre douce
     card: {
       backgroundColor: theme.card,
       borderColor: theme.border,
       borderWidth: 1,
-      borderRadius: 12,
-      padding: 14,
-      marginBottom: 10,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 12,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.04,
+          shadowRadius: 10,
+        },
+        android: {
+          elevation: 2,
+        },
+        web: {
+          boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.04)',
+        },
+      }),
     },
     cardHeader: {
       flexDirection: 'row',
@@ -49,7 +64,7 @@ export const getGlobalStyles = (theme: Theme) =>
     // =========================================================================
     modalOverlay: {
       flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       padding: 20,
     },
@@ -57,7 +72,7 @@ export const getGlobalStyles = (theme: Theme) =>
       backgroundColor: theme.card,
       borderColor: theme.border,
       borderWidth: 1,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 20,
     },
     dialogTitle: {
@@ -75,7 +90,7 @@ export const getGlobalStyles = (theme: Theme) =>
       backgroundColor: theme.card,
       borderColor: theme.border,
       borderWidth: 1,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 20,
     },
     editTitle: {
@@ -89,23 +104,21 @@ export const getGlobalStyles = (theme: Theme) =>
       justifyContent: 'space-between',
       marginTop: 10,
     },
-    
     button: {
-  backgroundColor: theme.primary,
-  paddingVertical: 12,
-  paddingHorizontal: 20,
-  borderRadius: 10,
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginTop: 10,
-},
-buttonText: {
-  color: '#FFFFFF',
-  fontSize: 15,
-  fontWeight: 'bold',
-},
+      backgroundColor: theme.primary,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 10,
+    },
+    buttonText: {
+      color: '#FFFFFF',
+      fontSize: 15,
+      fontWeight: 'bold',
+    },
 
-  
     // =========================================================================
     // 3. TYPOGRAPHIE & TEXTES
     // =========================================================================
@@ -175,7 +188,7 @@ buttonText: {
       borderColor: theme.border,
       color: theme.text,
       borderWidth: 1,
-      borderRadius: 8,
+      borderRadius: 10,
       padding: 10,
       fontSize: 15,
       marginBottom: 12,
@@ -188,7 +201,7 @@ buttonText: {
       borderColor: theme.border,
       color: theme.text,
       borderWidth: 1,
-      borderRadius: 8,
+      borderRadius: 10,
       padding: 10,
       fontSize: 16,
       marginBottom: 16,
@@ -265,27 +278,43 @@ buttonText: {
     // 6. ACCUEIL, REPAS & RÉSUMÉ NUTRITIONNEL
     // =========================================================================
     summaryCard: {
-      backgroundColor: theme.primary,
+      backgroundColor: theme.card,
+      borderColor: theme.border,
+      borderWidth: 1,
       padding: 16,
-      borderRadius: 12,
-      marginBottom: 20,
+      borderRadius: 16,
+      marginBottom: 16,
+      ...Platform.select({
+        ios: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.04,
+          shadowRadius: 10,
+        },
+        android: {
+          elevation: 2,
+        },
+        web: {
+          boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.04)',
+        },
+      }),
     },
     summaryTitle: {
-      color: '#FFFFFF',
+      color: theme.text,
       fontSize: 14,
-      opacity: 0.9,
+      fontWeight: '600',
     },
     progressBackground: {
-      height: 10,
-      backgroundColor: 'rgba(255, 255, 255, 0.3)',
-      borderRadius: 5,
+      height: 8,
+      backgroundColor: theme.border,
+      borderRadius: 4,
       overflow: 'hidden',
       marginVertical: 8,
     },
     progressBar: {
       height: '100%',
-      backgroundColor: '#FFFFFF',
-      borderRadius: 5,
+      backgroundColor: theme.primary,
+      borderRadius: 4,
     },
     macrosRow: {
       flexDirection: 'row',
@@ -293,15 +322,15 @@ buttonText: {
       marginTop: 4,
     },
     macro: {
-      color: '#FFFFFF',
-      fontSize: 13,
+      color: theme.textSecondary,
+      fontSize: 12,
       fontWeight: '500',
     },
     itemCard: {
       backgroundColor: theme.card,
       borderColor: theme.border,
       borderWidth: 1,
-      borderRadius: 8,
+      borderRadius: 12,
       padding: 12,
       marginBottom: 8,
       flexDirection: 'row',
@@ -332,10 +361,10 @@ buttonText: {
     // 7. LISTES D'ALIMENTS & CARTES PRODUIT
     // =========================================================================
     productImage: {
-      width: 48,
-      height: 48,
-      borderRadius: 6,
-      marginRight: 10,
+      width: 56,
+      height: 56,
+      borderRadius: 12,
+      marginRight: 12,
     },
     placeholderImage: {
       backgroundColor: theme.border,
@@ -364,7 +393,7 @@ buttonText: {
       borderColor: theme.border,
       borderWidth: 1,
       padding: 20,
-      borderRadius: 12,
+      borderRadius: 16,
     },
     detailTitle: {
       fontSize: 18,
@@ -402,7 +431,7 @@ buttonText: {
     badge: {
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 6,
+      borderRadius: 8,
       alignSelf: 'flex-start',
     },
     badgeActive: {
@@ -420,8 +449,8 @@ buttonText: {
       borderColor: theme.border,
       borderWidth: 1,
       borderRadius: 20,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
     },
     chipActive: {
       backgroundColor: theme.primary,
@@ -429,7 +458,8 @@ buttonText: {
     },
     chipText: {
       fontSize: 12,
-      color: theme.text,
+      color: theme.textSecondary,
+      fontWeight: '500',
     },
     chipTextActive: {
       fontSize: 12,
@@ -497,28 +527,28 @@ buttonText: {
       gap: 6,
       marginVertical: 6,
     },
-  dayCard: {
-    width: 52,
-    height: 65,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
-    marginRight: 8,
-  },
-  dayName: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  dayNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  todayIndicator: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 4,
-  }
+    dayCard: {
+      width: 48,
+      height: 60,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 14,
+      borderWidth: 1,
+      marginRight: 8,
+    },
+    dayName: {
+      fontSize: 10,
+      fontWeight: 'bold',
+      marginBottom: 2,
+    },
+    dayNumber: {
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    todayIndicator: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      marginTop: 3,
+    },
   });

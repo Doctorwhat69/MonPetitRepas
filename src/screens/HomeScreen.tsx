@@ -1,278 +1,376 @@
 import React, { useState, useContext } from 'react';
-import { Platform, View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Image,
+  ActivityIndicator,
+  Alert,
+  Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../context/ThemeContext';
 import { getGlobalStyles } from '../styles/globalStyles';
-import ProfileModal from '../components/ProfileModal';
-import SearchFoodModal from '../components/SearchFoodModal';
-import SaveMealModal from '../components/SaveMealModal';
-import SelectMealModal from '../components/SelectMealModal';
-import EditQuantityModal from '../components/EditQuantityModal';
-import MealGroupCard from '../components/MealGroupCard';
-import WeeklyCalendar from '../components/WeeklyCalendar';
-import ProgressBar from '../components/ProgressBar';
-import { useJournal, useSupprimerConsommation } from '../hooks/useJournal';
 import { useProfile } from '../hooks/useProfile';
-
-// Conversion locale YYYY-MM-DD sans décalage UTC
-const formatLocalDate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const SECTIONS = [
-  { key: 'petit_dejeuner', titre: '🌅 Petit-déjeuner', label: 'Petit-déjeuner' },
-  { key: 'dejeuner', titre: '☀️ Déjeuner', label: 'Déjeuner' },
-  { key: 'collation', titre: '🍎 Collations', label: 'Collation' },
-  { key: 'diner', titre: '🌙 Dîner', label: 'Dîner' },
-];
+import { useJournal } from '../hooks/useJournal';
+import { useGenererSemaine } from '../hooks/useMeals';
+import WeeklyCalendar from '../components/WeeklyCalendar';
 
 export default function HomeScreen() {
   const { theme } = useContext(ThemeContext);
-  const styles = getGlobalStyles(theme);
+  const globalStyles = getGlobalStyles(theme);
 
-  // États de l'interface
-  const [dateJournal, setDateJournal] = useState(new Date());
-  const [profileVisible, setProfileVisible] = useState(false);
-  const [selectedMoment, setSelectedMoment] = useState<
-    'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation' | null
-  >(null);
-  const [selectedMomentForRecipe, setSelectedMomentForRecipe] = useState<
-    'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation' | null
-  >(null);
-  const [selectedMealForSave, setSelectedMealForSave] = useState<{
-    momentLabel: string;
-    items: any[];
-  } | null>(null);
-  const [selectedItemForEdit, setSelectedItemForEdit] = useState<any | null>(null);
+  // Date sélectionnée dans le calendrier
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const dateStr = selectedDate.toISOString().split('T')[0];
 
-  const dateString = formatLocalDate(dateJournal);
-
-  // Hooks React Query
+  // Données profil et journal
   const { profile } = useProfile();
-  const { data: journal = [], isLoading } = useJournal(dateString);
-  const supprimerMutation = useSupprimerConsommation();
+  const { data: journalEntries = [], isLoading: loadingJournal } = useJournal(dateStr);
+  const genererSemaineMutation = useGenererSemaine();
 
-  // Détection date future
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const selectedDateNormalized = new Date(dateJournal);
-  selectedDateNormalized.setHours(0, 0, 0, 0);
-  const isFuture = selectedDateNormalized > today;
+  // Objectifs profil
+  const targetCal = profile?.calories_cible || 2200;
+  const targetProt = profile?.proteines_cible || 140;
+  const targetGluc = profile?.glucides_cible || 220;
+  const targetLip = profile?.lipides_cible || 75;
 
-  // Objectifs dynamiques (issues du profil Supabase)
-  const objectifs = {
-    calories: profile?.calories_cible || 2000,
-    proteines: profile?.proteines_cible || 140,
-    glucides: profile?.glucides_cible || 200,
-    lipides: profile?.lipides_cible || 65,
-  };
+  // Calculs consommés du jour
+  const currentCal = journalEntries.reduce((acc, i) => acc + Number(i.calories || 0), 0);
+  const currentProt = journalEntries.reduce((acc, i) => acc + Number(i.proteines || 0), 0);
+  const currentGluc = journalEntries.reduce((acc, i) => acc + Number(i.glucides || 0), 0);
+  const currentLip = journalEntries.reduce((acc, i) => acc + Number(i.lipides || 0), 0);
 
-  // Calculs des totaux
-  const categoriserJournal = (moment: string) => journal.filter((item) => item.moment === moment);
-  const totalCalories = journal.reduce((acc, item) => acc + Number(item.calories || 0), 0);
-  const totalProteines = journal.reduce((acc, item) => acc + Number(item.proteines || 0), 0);
-  const totalGlucides = journal.reduce((acc, item) => acc + Number(item.glucides || 0), 0);
-  const totalLipides = journal.reduce((acc, item) => acc + Number(item.lipides || 0), 0);
+  // Ratio %
+  const pctCal = Math.min(Math.round((currentCal / targetCal) * 100), 100);
 
-  const supprimerElement = (id: string) => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('Voulez-vous retirer cet aliment de votre journal ?')) {
-        supprimerMutation.mutate({ id, date: dateString });
-      }
-    } else {
-      Alert.alert('Supprimer', 'Voulez-vous retirer cet aliment de votre journal ?', [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => supprimerMutation.mutate({ id, date: dateString }),
+  // Groupement des aliments de la journée par plat (`repas_groupe_id` ou `moment`)
+  const mealsByMoment = ['petit_dejeuner', 'dejeuner', 'collation', 'diner'].map((momentKey) => {
+    const items = journalEntries.filter((i) => i.moment === momentKey);
+    const totalCals = items.reduce((acc, i) => acc + Number(i.calories || 0), 0);
+    const totalP = items.reduce((acc, i) => acc + Number(i.proteines || 0), 0);
+    const totalG = items.reduce((acc, i) => acc + Number(i.glucides || 0), 0);
+    const totalL = items.reduce((acc, i) => acc + Number(i.lipides || 0), 0);
+
+    const labels: Record<string, { title: string; time: string }> = {
+      petit_dejeuner: { title: 'PETIT-DÉJEUNER', time: '08:00' },
+      dejeuner: { title: 'DÉJEUNER', time: '12:30' },
+      collation: { title: 'COLLATION', time: '16:00' },
+      diner: { title: 'DÎNER', time: '19:45' },
+    };
+
+    return {
+      key: momentKey,
+      label: labels[momentKey]?.title || momentKey.toUpperCase(),
+      defaultTime: labels[momentKey]?.time || '',
+      items,
+      totalCals,
+      totalP,
+      totalG,
+      totalL,
+      repasNom: items[0]?.repas_nom || items[0]?.aliment_nom || 'Aucun repas enregistré',
+      imageUrl: items[0]?.image_url || null,
+    };
+  });
+
+  const handleGenererSemaine = () => {
+    const d = new Date(selectedDate);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+
+    genererSemaineMutation.mutate(
+      { mondayDate: monday },
+      {
+        onSuccess: () => {
+          const msg = 'Votre semaine a été générée avec succès !';
+          Platform.OS === 'web' ? alert(msg) : Alert.alert('Planning généré', msg);
         },
-      ]);
-    }
+        onError: (err: any) => {
+          const msg = err.message || 'Erreur lors de la génération';
+          Platform.OS === 'web' ? alert(msg) : Alert.alert('Erreur', msg);
+        },
+      }
+    );
   };
+
+  // Formate la date d'en-tête (ex : Mercredi 14 Mars)
+  const dateFormatted = selectedDate.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  const dateHeader = dateFormatted.charAt(0).toUpperCase() + dateFormatted.slice(1);
 
   return (
-    <View style={styles.container}>
-      {/* En-tête */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{isFuture ? 'Planification' : 'Mon Journal'}</Text>
-        <TouchableOpacity onPress={() => setProfileVisible(true)} style={styles.chip}>
-          <Text style={styles.chipText}>Profil</Text>
+    <ScrollView style={globalStyles.container} showsVerticalScrollIndicator={false}>
+      {/* 1. Header Utilisateur */}
+      <View style={styles.topHeader}>
+        <View style={styles.userInfo}>
+          <Image
+            source={{
+              uri: profile?.avatar_url || 'https://via.placeholder.com/100',
+            }}
+            style={styles.avatarHeader}
+          />
+          <View>
+            <Text style={styles.greetingText}>Bonjour {profile?.prenom || 'Thomas'}</Text>
+            <Text style={[styles.subDateText, { color: theme.textSecondary }]}>{dateHeader}</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity style={[styles.iconCircle, { borderColor: theme.border }]}>
+          <Ionicons name="notifications-outline" size={20} color={theme.text} />
         </TouchableOpacity>
       </View>
 
-      <WeeklyCalendar currentDate={dateJournal} onChangeDate={setDateJournal} />
+      {/* 2. Calendrier Horizontal */}
+      <View style={{ marginVertical: 12 }}>
+        <WeeklyCalendar selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+      </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
-        {/* Bilan du jour */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Bilan de la journée</Text>
+      {/* 3. Carte Objectif Journalier */}
+      <View style={[globalStyles.card, { padding: 18 }]}>
+        <View style={styles.rowBetween}>
+          <Text style={[styles.cardTitle, { color: theme.text }]}>Objectif Journalier</Text>
+          <View style={[styles.pctBadge, { backgroundColor: '#E8F5E9' }]}>
+            <Text style={{ color: theme.primary, fontWeight: 'bold', fontSize: 12 }}>{pctCal}%</Text>
+          </View>
+        </View>
 
-          <View style={{ marginVertical: 12, alignItems: 'center' }}>
-            <Text style={{ fontSize: 28, fontWeight: 'bold', color: theme.primary }}>
-              {Math.round(totalCalories)}{' '}
-              <Text style={{ fontSize: 16, color: theme.textSecondary }}>/ {objectifs.calories} kcal</Text>
+        <Text style={[styles.calNumbers, { color: theme.text }]}>
+          {Math.round(currentCal)} <Text style={{ fontSize: 16, color: theme.textSecondary }}>/ {targetCal} kcal</Text>
+        </Text>
+
+        {/* Barre de progression principale */}
+        <View style={[globalStyles.progressBackground, { height: 10, borderRadius: 5, marginVertical: 12 }]}>
+          <View
+            style={[
+              globalStyles.progressBar,
+              { width: `${pctCal}%`, backgroundColor: theme.primary, borderRadius: 5 },
+            ]}
+          />
+        </View>
+
+        {/* Macros détaillées sous la jauge */}
+        <View style={styles.macrosWrap}>
+          <View style={styles.macroTag}>
+            <View style={[styles.dot, { backgroundColor: theme.protein }]} />
+            <Text style={[styles.macroTagText, { color: theme.textSecondary }]}>
+              <Text style={{ fontWeight: 'bold', color: theme.text }}>{Math.round(currentProt)}</Text>/{targetProt}g Prot
             </Text>
           </View>
 
-          <ProgressBar label="Protéines" actuel={totalProteines} objectif={objectifs.proteines} couleur="#E53935" />
-          <ProgressBar label="Glucides" actuel={totalGlucides} objectif={objectifs.glucides} couleur="#FB8C00" />
-          <ProgressBar label="Lipides" actuel={totalLipides} objectif={objectifs.lipides} couleur="#1E88E5" />
+          <View style={styles.macroTag}>
+            <View style={[styles.dot, { backgroundColor: theme.carbs }]} />
+            <Text style={[styles.macroTagText, { color: theme.textSecondary }]}>
+              <Text style={{ fontWeight: 'bold', color: theme.text }}>{Math.round(currentGluc)}</Text>/{targetGluc}g Gluc
+            </Text>
+          </View>
+
+          <View style={styles.macroTag}>
+            <View style={[styles.dot, { backgroundColor: theme.fat }]} />
+            <Text style={[styles.macroTagText, { color: theme.textSecondary }]}>
+              <Text style={{ fontWeight: 'bold', color: theme.text }}>{Math.round(currentLip)}</Text>/{targetLip}g Lip
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* 4. Bannière "Générer ma semaine" */}
+      <TouchableOpacity
+        style={[styles.genererBanner, { backgroundColor: theme.card, borderColor: theme.border }]}
+        onPress={handleGenererSemaine}
+        disabled={genererSemaineMutation.isPending}
+      >
+        <View style={[styles.wandCircle, { backgroundColor: '#E8F5E9' }]}>
+          {genererSemaineMutation.isPending ? (
+            <ActivityIndicator size="small" color={theme.primary} />
+          ) : (
+            <Ionicons name="sparkles" size={20} color={theme.primary} />
+          )}
         </View>
 
-        {/* Repas */}
-        {isLoading ? (
-          <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={[styles.bannerTitle, { color: theme.text }]}>Générer ma semaine</Text>
+          <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 2 }}>
+            Créez instantanément vos repas équilibrés adaptés à vos objectifs.
+          </Text>
+        </View>
+
+        <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+      </TouchableOpacity>
+
+      {/* 5. Section Repas d'aujourd'hui */}
+      <View style={{ marginTop: 20, marginBottom: 40 }}>
+        <Text style={[styles.sectionHeaderTitle, { color: theme.text }]}>Repas d'aujourd'hui</Text>
+        <Text style={{ color: theme.textSecondary, fontSize: 12, marginBottom: 14 }}>
+          Suivez vos apports repas par repas
+        </Text>
+
+        {loadingJournal ? (
+          <ActivityIndicator color={theme.primary} style={{ marginTop: 20 }} />
         ) : (
-          SECTIONS.map((section) => {
-            const alimentsDuRepas = categoriserJournal(section.key);
-            const calRepas = alimentsDuRepas.reduce((acc, item) => acc + Number(item.calories || 0), 0);
+          mealsByMoment.map((m) => (
+            <View key={m.key} style={[styles.repasCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              {/* Miniature Image */}
+              {m.imageUrl ? (
+                <Image source={{ uri: m.imageUrl }} style={styles.mealThumb} />
+              ) : (
+                <View style={[styles.mealThumb, styles.placeholderThumb, { backgroundColor: theme.border }]}>
+                  <Ionicons name="restaurant-outline" size={22} color={theme.textSecondary} />
+                </View>
+              )}
 
-            return (
-              <View key={section.key} style={{ marginBottom: 20 }}>
-                <View style={[styles.rowBetween, { marginBottom: 10, alignItems: 'center' }]}>
-                  <Text style={styles.sectionTitle}>{section.titre}</Text>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <Text style={styles.textSecondary}>{Math.round(calRepas)} kcal</Text>
-
-                    {alimentsDuRepas.length > 0 && (
-                      <TouchableOpacity
-                        onPress={() =>
-                          setSelectedMealForSave({
-                            momentLabel: section.label,
-                            items: alimentsDuRepas,
-                          })
-                        }
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                      >
-                        <Ionicons name="bookmark-outline" size={16} color={theme.primary} />
-                        <Text style={{ color: theme.primary, fontSize: 12, fontWeight: '600' }}>Sauvegarder</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+              {/* Détails du repas */}
+              <View style={{ flex: 1, paddingLeft: 12 }}>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.momentBadgeText}>{m.label}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textSecondary }}>{m.defaultTime}</Text>
                 </View>
 
-                {/* Structure de regroupement des aliments */}
-                {(() => {
-                  const groupesMap = new Map<string, { nom: string; items: any[] }>();
-                  const isoles: any[] = [];
+                <Text style={[styles.mealTitle, { color: theme.text }]} numberOfLines={1}>
+                  {m.repasNom}
+                </Text>
 
-                  alimentsDuRepas.forEach((aliment) => {
-                    if (aliment.repas_groupe_id) {
-                      if (!groupesMap.has(aliment.repas_groupe_id)) {
-                        groupesMap.set(aliment.repas_groupe_id, {
-                          nom: aliment.repas_nom || 'Plat composé',
-                          items: [],
-                        });
-                      }
-                      groupesMap.get(aliment.repas_groupe_id)!.items.push(aliment);
-                    } else {
-                      isoles.push(aliment);
-                    }
-                  });
-
-                  return (
-                    <>
-                      {/* Cartes de plats groupés */}
-                      {Array.from(groupesMap.entries()).map(([groupeId, groupe]) => (
-                        <MealGroupCard
-                          key={groupeId}
-                          repasGroupeId={groupeId}
-                          nom={groupe.nom}
-                          items={groupe.items}
-                          dateString={dateString}
-                          onEditItem={(aliment) => setSelectedItemForEdit(aliment)}
-                        />
-                      ))}
-
-                      {/* Aliments isolés */}
-                      {isoles.map((aliment) => (
-                        <View key={aliment.id} style={styles.itemCard}>
-                          <TouchableOpacity
-                            style={{ flex: 1 }}
-                            onPress={() => setSelectedItemForEdit(aliment)}
-                          >
-                            <View style={styles.itemInfo}>
-                              <Text style={styles.itemName}>{aliment.aliment_nom}</Text>
-                              <Text style={styles.itemDetails}>
-                                {aliment.quantite}g | P: {aliment.proteines}g G: {aliment.glucides}g L: {aliment.lipides}g
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-                          <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                            <Text style={styles.caloriesText}>{aliment.calories} kcal</Text>
-                            <TouchableOpacity onPress={() => supprimerElement(aliment.id)}>
-                              <Text style={styles.deleteButton}>X</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      ))}
-                    </>
-                  );
-                })()}
-
-                {/* Boutons d'ajout côte à côte */}
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-                  <TouchableOpacity
-                    style={[
-                      styles.card,
-                      { flex: 1, alignItems: 'center', backgroundColor: 'transparent', borderStyle: 'dashed', marginBottom: 0 },
-                    ]}
-                    onPress={() => setSelectedMoment(section.key as any)}
-                  >
-                    <Text style={{ color: theme.primary, fontWeight: 'bold' }}>+ Aliment</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.card,
-                      { flex: 1, alignItems: 'center', backgroundColor: 'transparent', borderStyle: 'dashed', marginBottom: 0 },
-                    ]}
-                    onPress={() => setSelectedMomentForRecipe(section.key as any)}
-                  >
-                    <Text style={{ color: theme.primary, fontWeight: 'bold' }}>+ Recette</Text>
-                  </TouchableOpacity>
-                </View>
+                <Text style={[styles.mealSubText, { color: theme.textSecondary }]}>
+                  <Text style={{ fontWeight: 'bold', color: theme.text }}>{Math.round(m.totalCals)} kcal</Text>
+                  {'  '}•{'  '}P: {Math.round(m.totalP)}g{' '}
+                  <Text style={{ color: theme.carbs }}>G: {Math.round(m.totalG)}g</Text>{' '}
+                  <Text style={{ color: theme.fat }}>L: {Math.round(m.totalL)}g</Text>
+                </Text>
               </View>
-            );
-          })
+            </View>
+          ))
         )}
-      </ScrollView>
-
-      {/* Modales */}
-      <ProfileModal visible={profileVisible} onClose={() => setProfileVisible(false)} />
-
-      <SearchFoodModal
-        visible={selectedMoment !== null}
-        moment={selectedMoment}
-        dateString={dateString}
-        onClose={() => setSelectedMoment(null)}
-      />
-
-      <SelectMealModal
-        visible={selectedMomentForRecipe !== null}
-        moment={selectedMomentForRecipe}
-        dateString={dateString}
-        onClose={() => setSelectedMomentForRecipe(null)}
-      />
-
-      <SaveMealModal
-        visible={!!selectedMealForSave}
-        onClose={() => setSelectedMealForSave(null)}
-        items={selectedMealForSave?.items || []}
-        defaultNom={selectedMealForSave ? `Mon ${selectedMealForSave.momentLabel}` : ''}
-      />
-
-      <EditQuantityModal
-        visible={!!selectedItemForEdit}
-        item={selectedItemForEdit}
-        dateString={dateString}
-        onClose={() => setSelectedItemForEdit(null)}
-      />
-    </View>
+      </View>
+    </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  topHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatarHeader: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  greetingText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  subDateText: {
+    fontSize: 12,
+  },
+  iconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  pctBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  calNumbers: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 6,
+  },
+  macrosWrap: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  macroTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  macroTagText: {
+    fontSize: 11,
+  },
+  genererBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  wandCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bannerTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  sectionHeaderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  repasCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  mealThumb: {
+    width: 54,
+    height: 54,
+    borderRadius: 12,
+  },
+  placeholderThumb: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  momentBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#6B7280',
+    letterSpacing: 0.5,
+  },
+  mealTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginVertical: 2,
+  },
+  mealSubText: {
+    fontSize: 11,
+  },
+});

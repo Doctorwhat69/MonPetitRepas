@@ -200,7 +200,7 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
   const totalProteines = items.reduce((acc, i) => acc + Number(i.proteines || 0), 0);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="fade" transparent>
       <View style={styles.overlay}>
         <View style={[styles.container, { backgroundColor: theme.card }]}>
           {/* Header Modal */}

@@ -11,6 +11,12 @@ export interface RepasFavori {
   auteur_nom?: string;
   is_public: boolean;
   moment_cible?: 'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation' | string;
+  
+  // NOUVEAUX CHAMPS FIGMA
+  image_url?: string;
+  temps_prep?: number;
+  tags?: string[];
+  
   items: Array<{
     aliment_nom: string;
     quantite: number;

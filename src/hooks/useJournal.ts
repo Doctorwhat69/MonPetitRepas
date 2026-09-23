@@ -16,6 +16,7 @@ export interface Consommation {
   repas_groupe_id?: string | null;
   repas_nom?: string | null;
   portion_factor?: number | null;
+  image_url?: string;
 }
 
 // Récupère les consommations pour une date précise (format YYYY-MM-DD)
