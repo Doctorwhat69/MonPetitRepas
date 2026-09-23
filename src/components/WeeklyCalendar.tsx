@@ -12,7 +12,6 @@ export default function WeeklyCalendar({ selectedDate, onSelectDate }: Props) {
   const { theme } = useContext(ThemeContext);
   const globalStyles = getGlobalStyles(theme);
 
-  // Génération des 7 jours de la semaine (Lundi à Dimanche) correspondant à selectedDate
   const getWeekDays = (baseDate: Date) => {
     const d = new Date(baseDate);
     const day = d.getDay();
@@ -50,7 +49,7 @@ export default function WeeklyCalendar({ selectedDate, onSelectDate }: Props) {
           <TouchableOpacity
             key={index}
             style={[
-              globalStyles.dayCard,
+              styles.dayCardFlex,
               {
                 backgroundColor: isSelected ? theme.primary : theme.card,
                 borderColor: isSelected ? theme.primary : theme.border,
@@ -94,7 +93,15 @@ export default function WeeklyCalendar({ selectedDate, onSelectDate }: Props) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    width: '100%',
+    gap: 6,
+  },
+  dayCardFlex: {
+    flex: 1, // Chaque carte prend 1/7 de la largeur disponible
+    height: 60,
+    justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
   },
 });
