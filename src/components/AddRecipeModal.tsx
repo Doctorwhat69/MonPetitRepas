@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../context/ThemeContext';
 import { useSaveMealAsFavorite } from '../hooks/useMeals';
 import { supabase } from '../services/supabase';
+import NutriScoreBadge from './NutriScoreBadge';
 
 interface Props {
   visible: boolean;
@@ -54,7 +55,7 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
   const [ingGluc, setIngGluc] = useState('');
   const [ingLip, setIngLip] = useState('');
 
-  // Recherche d'aliments dans la table Ciqual
+  // Recherche d'aliments dans la nouvelle table "aliments"
   useEffect(() => {
     if (searchQuery.trim().length < 2 || isManual) {
       setSearchResults([]);
@@ -64,27 +65,20 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        // Recherche sur la colonne 'nom' de la table Ciqual
         const { data, error } = await supabase
-          .from('aliments_ciqual')
+          .from('aliments')
           .select('*')
           .ilike('nom', `%${searchQuery.trim()}%`)
           .limit(10);
 
         if (error) {
-          // Tente avec 'alim_nom' si 'nom' échoue
-          const { data: fallbackData } = await supabase
-            .from('aliments_ciqual')
-            .select('*')
-            .ilike('alim_nom', `%${searchQuery.trim()}%`)
-            .limit(10);
-
-          setSearchResults(fallbackData || []);
+          console.error('Erreur recherche aliments :', error);
+          setSearchResults([]);
         } else {
           setSearchResults(data || []);
         }
       } catch (err) {
-        console.error('Erreur recherche Ciqual :', err);
+        console.error('Erreur serveur aliments :', err);
       } finally {
         setIsSearching(false);
       }
@@ -95,13 +89,13 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
 
   const handleSelectAliment = (alim: any) => {
     setSelectedAliment(alim);
-    setSearchQuery(alim.nom || alim.alim_nom || alim.alim_nom_fr);
+    setSearchQuery(alim.nom);
+    setIngQuantite(String(alim.portion_poids_g || 100));
     setSearchResults([]);
   };
 
   const handleAddIngredient = () => {
     const qte = Number(ingQuantite) || 100;
-    const ratio = qte / 100;
 
     let newItem;
 
@@ -127,20 +121,24 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
         return;
       }
 
-      const alimentNom = selectedAliment.nom || selectedAliment.alim_nom || selectedAliment.alim_nom_fr;
-      const calories100g = Number(selectedAliment.energie_kcal || selectedAliment.calories || 0);
-      const prot100g = Number(selectedAliment.proteines || 0);
-      const gluc100g = Number(selectedAliment.glucides || 0);
-      const lip100g = Number(selectedAliment.lipides || 0);
+      const portionRef = Number(selectedAliment.portion_poids_g) || 100;
+      const ratio = qte / portionRef;
+
+      const alimentNom = selectedAliment.nom;
+      const calPortion = Number(selectedAliment.calories || 0);
+      const protPortion = Number(selectedAliment.proteines || 0);
+      const glucPortion = Number(selectedAliment.glucides || 0);
+      const lipPortion = Number(selectedAliment.lipides || 0);
 
       newItem = {
         id: Date.now().toString(),
         aliment_nom: alimentNom,
         quantite: qte,
-        calories: Math.round(calories100g * ratio),
-        proteines: Math.round(prot100g * ratio * 10) / 10,
-        glucides: Math.round(gluc100g * ratio * 10) / 10,
-        lipides: Math.round(lip100g * ratio * 10) / 10,
+        calories: Math.round(calPortion * ratio),
+        proteines: Math.round(protPortion * ratio * 10) / 10,
+        glucides: Math.round(glucPortion * ratio * 10) / 10,
+        lipides: Math.round(lipPortion * ratio * 10) / 10,
+        nutriscore: selectedAliment.nutriscore,
       };
     }
 
@@ -260,7 +258,7 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
                 <>
                   <TextInput
                     style={[styles.input, { color: theme.text, borderColor: theme.border }]}
-                    placeholder="Rechercher un aliment (ex : galette)..."
+                    placeholder="Rechercher un aliment (ex : épinard)..."
                     placeholderTextColor={theme.textSecondary}
                     value={searchQuery}
                     onChangeText={(txt) => {
@@ -274,20 +272,26 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
                   {/* Résultats de recherche */}
                   {searchResults.length > 0 && (
                     <View style={[styles.resultsBox, { borderColor: theme.border, backgroundColor: theme.card }]}>
-                      {searchResults.map((item) => {
-                        const alimentNom = item.nom || item.alim_nom || item.alim_nom_fr;
-                        const cal = item.energie_kcal || item.calories || 0;
-                        return (
-                          <TouchableOpacity
-                            key={item.id || item.alim_code || String(Math.random())}
-                            style={[styles.resultRow, { borderBottomColor: theme.border }]}
-                            onPress={() => handleSelectAliment(item)}
-                          >
-                            <Text style={{ color: theme.text, fontSize: 12, flex: 1 }}>{alimentNom}</Text>
-                            <Text style={{ color: theme.textSecondary, fontSize: 11 }}>{cal} kcal/100g</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
+                      {searchResults.map((item) => (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={[styles.resultRow, { borderBottomColor: theme.border }]}
+                          onPress={() => handleSelectAliment(item)}
+                        >
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ color: theme.text, fontSize: 12, fontWeight: 'bold', flex: 1 }}>
+                                {item.nom}
+                              </Text>
+                              <NutriScoreBadge score={item.nutriscore} size="sm" />
+                            </View>
+                            <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 2 }}>
+                              {item.calories} kcal • {item.portion_description} ({item.portion_poids_g} g)
+                            </Text>
+                          </View>
+                          <Ionicons name="add-circle-outline" size={20} color={theme.primary} />
+                        </TouchableOpacity>
+                      ))}
                     </View>
                   )}
 
@@ -382,9 +386,12 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
 
             {items.map((item) => (
               <View key={item.id} style={[styles.itemRow, { borderColor: theme.border }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 13 }}>{item.aliment_nom}</Text>
-                  <Text style={{ color: theme.textSecondary, fontSize: 11 }}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 13 }}>{item.aliment_nom}</Text>
+                    {item.nutriscore && <NutriScoreBadge score={item.nutriscore} size="sm" />}
+                  </View>
+                  <Text style={{ color: theme.textSecondary, fontSize: 11, marginTop: 2 }}>
                     {item.quantite} g | {item.calories} kcal (P : {item.proteines} g, G : {item.glucides} g, L : {item.lipides} g)
                   </Text>
                 </View>
@@ -487,7 +494,7 @@ const styles = StyleSheet.create({
   resultsBox: {
     borderWidth: 1,
     borderRadius: 8,
-    maxHeight: 140,
+    maxHeight: 160,
     marginBottom: 8,
   },
   resultRow: {

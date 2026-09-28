@@ -1,15 +1,18 @@
+export type NutriScoreGrade = 'A' | 'B' | 'C' | 'D' | 'E';
+
 export interface Aliment {
-  id: string;
+  id: number;
   nom: string;
-  marque?: string;
-  image_url?: string;
+  categorie: string;
+  portion_description: string;
+  portion_poids_g: number;
   calories: number;
   proteines: number;
-  glucides: number;
   lipides: number;
-  nutriscore: string;
+  glucides: number;
+  sucres: number;
+  nutriscore: NutriScoreGrade;
 }
-
 export interface Profil {
   id?: string;
   user_id?: string;
