@@ -7,26 +7,36 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
-  Alert,
-  Platform,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { getGlobalStyles } from '../styles/globalStyles';
 import { useProfile } from '../hooks/useProfile';
 import { useJournal } from '../hooks/useJournal';
 import { useGenererSemaine } from '../hooks/useMeals';
 import WeeklyCalendar from '../components/WeeklyCalendar';
+import SearchFoodModal from '../components/SearchFoodModal';
+import SelectMealModal from '../components/SelectMealModal';
+
+type MomentType = 'petit_dejeuner' | 'dejeuner' | 'diner' | 'collation';
 
 export default function HomeScreen() {
   const { theme } = useContext(ThemeContext);
+  const { showToast } = useToast();
   const globalStyles = getGlobalStyles(theme);
 
-  // Date sélectionnée dans le calendrier
+  // Date sélectionnée
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const dateStr = selectedDate.toISOString().split('T')[0];
 
-  // Données profil et journal
+  // Modales d'ajout
+  const [choiceMoment, setChoiceMoment] = useState<MomentType | null>(null);
+  const [foodModalMoment, setFoodModalMoment] = useState<MomentType | null>(null);
+  const [mealModalMoment, setMealModalMoment] = useState<MomentType | null>(null);
+
+  // Données
   const { profile } = useProfile();
   const { data: journalEntries = [], isLoading: loadingJournal } = useJournal(dateStr);
   const genererSemaineMutation = useGenererSemaine();
@@ -37,17 +47,15 @@ export default function HomeScreen() {
   const targetGluc = profile?.glucides_cible || 220;
   const targetLip = profile?.lipides_cible || 75;
 
-  // Calculs consommés du jour
+  // Consommations
   const currentCal = journalEntries.reduce((acc, i) => acc + Number(i.calories || 0), 0);
   const currentProt = journalEntries.reduce((acc, i) => acc + Number(i.proteines || 0), 0);
   const currentGluc = journalEntries.reduce((acc, i) => acc + Number(i.glucides || 0), 0);
   const currentLip = journalEntries.reduce((acc, i) => acc + Number(i.lipides || 0), 0);
 
-  // Ratio %
   const pctCal = Math.min(Math.round((currentCal / targetCal) * 100), 100);
 
-  // Groupement des aliments de la journée par plat (`repas_groupe_id` ou `moment`)
-  const mealsByMoment = ['petit_dejeuner', 'dejeuner', 'collation', 'diner'].map((momentKey) => {
+  const mealsByMoment = (['petit_dejeuner', 'dejeuner', 'collation', 'diner'] as MomentType[]).map((momentKey) => {
     const items = journalEntries.filter((i) => i.moment === momentKey);
     const totalCals = items.reduce((acc, i) => acc + Number(i.calories || 0), 0);
     const totalP = items.reduce((acc, i) => acc + Number(i.proteines || 0), 0);
@@ -85,18 +93,15 @@ export default function HomeScreen() {
       { mondayDate: monday },
       {
         onSuccess: () => {
-          const msg = 'Votre semaine a été générée avec succès !';
-          Platform.OS === 'web' ? alert(msg) : Alert.alert('Planning généré', msg);
+          showToast('Votre semaine a été générée avec succès !', 'success');
         },
         onError: (err: any) => {
-          const msg = err.message || 'Erreur lors de la génération';
-          Platform.OS === 'web' ? alert(msg) : Alert.alert('Erreur', msg);
+          showToast(err.message || 'Erreur lors de la génération', 'error');
         },
       }
     );
   };
 
-  // Formate la date d'en-tête (ex : Mercredi 14 Mars)
   const dateFormatted = selectedDate.toLocaleDateString('fr-FR', {
     weekday: 'long',
     day: 'numeric',
@@ -110,9 +115,7 @@ export default function HomeScreen() {
       <View style={styles.topHeader}>
         <View style={styles.userInfo}>
           <Image
-            source={{
-              uri: profile?.avatar_url || 'https://via.placeholder.com/100',
-            }}
+            source={{ uri: profile?.avatar_url || 'https://via.placeholder.com/100' }}
             style={styles.avatarHeader}
           />
           <View>
@@ -144,7 +147,6 @@ export default function HomeScreen() {
           {Math.round(currentCal)} <Text style={{ fontSize: 16, color: theme.textSecondary }}>/ {targetCal} kcal</Text>
         </Text>
 
-        {/* Barre de progression principale */}
         <View style={[globalStyles.progressBackground, { height: 10, borderRadius: 5, marginVertical: 12 }]}>
           <View
             style={[
@@ -154,7 +156,6 @@ export default function HomeScreen() {
           />
         </View>
 
-        {/* Macros détaillées sous la jauge */}
         <View style={styles.macrosWrap}>
           <View style={styles.macroTag}>
             <View style={[styles.dot, { backgroundColor: theme.protein }]} />
@@ -215,7 +216,6 @@ export default function HomeScreen() {
         ) : (
           mealsByMoment.map((m) => (
             <View key={m.key} style={[styles.repasCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              {/* Miniature Image */}
               {m.imageUrl ? (
                 <Image source={{ uri: m.imageUrl }} style={styles.mealThumb} />
               ) : (
@@ -224,11 +224,20 @@ export default function HomeScreen() {
                 </View>
               )}
 
-              {/* Détails du repas */}
               <View style={{ flex: 1, paddingLeft: 12 }}>
                 <View style={styles.rowBetween}>
                   <Text style={styles.momentBadgeText}>{m.label}</Text>
-                  <Text style={{ fontSize: 11, color: theme.textSecondary }}>{m.defaultTime}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 11, color: theme.textSecondary }}>{m.defaultTime}</Text>
+
+                    {/* Clique sur + ouvre la modale de choix */}
+                    <TouchableOpacity
+                      style={[styles.quickAddBtn, { backgroundColor: theme.primary + '18' }]}
+                      onPress={() => setChoiceMoment(m.key)}
+                    >
+                      <Ionicons name="add" size={16} color={theme.primary} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <Text style={[styles.mealTitle, { color: theme.text }]} numberOfLines={1}>
@@ -246,6 +255,71 @@ export default function HomeScreen() {
           ))
         )}
       </View>
+
+      {/* --- MODALE DE CHOIX (Aliment vs Recette) --- */}
+      <Modal visible={choiceMoment !== null} animationType="fade" transparent>
+        <TouchableOpacity
+          style={styles.choiceOverlay}
+          activeOpacity={1}
+          onPress={() => setChoiceMoment(null)}
+        >
+          <View style={[styles.choiceContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <Text style={[styles.choiceTitle, { color: theme.text }]}>Que souhaitez-vous ajouter ?</Text>
+
+            <TouchableOpacity
+              style={[styles.choiceOption, { borderColor: theme.border, backgroundColor: theme.background }]}
+              onPress={() => {
+                const mom = choiceMoment;
+                setChoiceMoment(null);
+                setFoodModalMoment(mom);
+              }}
+            >
+              <View style={[styles.choiceIcon, { backgroundColor: theme.primary + '15' }]}>
+                <Ionicons name="nutrition-outline" size={22} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 14 }}>Un aliment seul</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 11 }}>Rechercher un ingrédient brut ou produit</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.choiceOption, { borderColor: theme.border, backgroundColor: theme.background }]}
+              onPress={() => {
+                const mom = choiceMoment;
+                setChoiceMoment(null);
+                setMealModalMoment(mom);
+              }}
+            >
+              <View style={[styles.choiceIcon, { backgroundColor: theme.primary + '15' }]}>
+                <Ionicons name="restaurant-outline" size={22} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: theme.text, fontWeight: 'bold', fontSize: 14 }}>Une recette / Un repas complet</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 11 }}>Choisir parmi mes recettes enregistrées</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modale recherche d'aliment seul */}
+      <SearchFoodModal
+        visible={foodModalMoment !== null}
+        moment={foodModalMoment}
+        dateString={dateStr}
+        onClose={() => setFoodModalMoment(null)}
+      />
+
+      {/* Modale de sélection d'une recette complète */}
+      <SelectMealModal
+        visible={mealModalMoment !== null}
+        moment={mealModalMoment}
+        dateString={dateStr}
+        onClose={() => setMealModalMoment(null)}
+      />
     </ScrollView>
   );
 }
@@ -372,5 +446,47 @@ const styles = StyleSheet.create({
   },
   mealSubText: {
     fontSize: 11,
+  },
+  quickAddBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  choiceOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  choiceContainer: {
+    width: '100%',
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 18,
+  },
+  choiceTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  choiceOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 10,
+    gap: 12,
+  },
+  choiceIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

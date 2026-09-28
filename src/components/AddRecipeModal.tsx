@@ -7,12 +7,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { useSaveMealAsFavorite } from '../hooks/useMeals';
 import { supabase } from '../services/supabase';
 import NutriScoreBadge from './NutriScoreBadge';
@@ -33,6 +32,7 @@ const MOMENTS: { key: MomentType; label: string }[] = [
 
 export default function AddRecipeModal({ visible, onClose }: Props) {
   const { theme } = useContext(ThemeContext);
+  const { showToast } = useToast();
   const saveMealMutation = useSaveMealAsFavorite();
 
   // État de la recette
@@ -55,7 +55,7 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
   const [ingGluc, setIngGluc] = useState('');
   const [ingLip, setIngLip] = useState('');
 
-  // Recherche d'aliments dans la nouvelle table "aliments"
+  // Recherche d'aliments dans la table "aliments"
   useEffect(() => {
     if (searchQuery.trim().length < 2 || isManual) {
       setSearchResults([]);
@@ -101,8 +101,7 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
 
     if (isManual) {
       if (!ingNom.trim()) {
-        const msg = 'Veuillez saisir un nom pour l’ingrédient.';
-        Platform.OS === 'web' ? alert(msg) : Alert.alert('Attention', msg);
+        showToast('Veuillez saisir un nom pour l’ingrédient.', 'info');
         return;
       }
       newItem = {
@@ -116,8 +115,7 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
       };
     } else {
       if (!selectedAliment) {
-        const msg = 'Veuillez sélectionner un aliment dans la liste ou passer en saisie manuelle.';
-        Platform.OS === 'web' ? alert(msg) : Alert.alert('Attention', msg);
+        showToast('Sélectionnez un aliment ou passez en saisie manuelle.', 'info');
         return;
       }
 
@@ -154,6 +152,8 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
     setIngGluc('');
     setIngLip('');
     setIsManual(false);
+
+    showToast('Ingrédient ajouté', 'success');
   };
 
   const handleRemoveIngredient = (id: string) => {
@@ -162,14 +162,12 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
 
   const handleSaveRecipe = () => {
     if (!nom.trim()) {
-      const msg = 'Veuillez donner un nom à la recette.';
-      Platform.OS === 'web' ? alert(msg) : Alert.alert('Attention', msg);
+      showToast('Veuillez donner un nom à la recette.', 'info');
       return;
     }
 
     if (items.length === 0) {
-      const msg = 'Ajoutez au moins un ingrédient à la recette.';
-      Platform.OS === 'web' ? alert(msg) : Alert.alert('Attention', msg);
+      showToast('Ajoutez au moins un ingrédient à la recette.', 'info');
       return;
     }
 
@@ -182,13 +180,13 @@ export default function AddRecipeModal({ visible, onClose }: Props) {
       },
       {
         onSuccess: () => {
+          showToast('Recette enregistrée avec succès !', 'success');
           setNom('');
           setItems([]);
           onClose();
         },
         onError: (err: any) => {
-          const msg = err.message || 'Erreur lors de la sauvegarde';
-          Platform.OS === 'web' ? alert(msg) : Alert.alert('Erreur', msg);
+          showToast(err.message || 'Erreur lors de la sauvegarde.', 'error');
         },
       }
     );

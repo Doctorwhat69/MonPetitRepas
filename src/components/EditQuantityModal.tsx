@@ -1,85 +1,120 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../context/ThemeContext';
-import { getGlobalStyles } from '../styles/globalStyles';
-import { useModifierConsommation } from '../hooks/useJournal';
+import { useToast } from '../context/ToastContext';
 
 interface Props {
   visible: boolean;
-  item: any | null;
-  dateString: string;
+  item: {
+    id: string;
+    aliment_nom: string;
+    quantite: number;
+    calories: number;
+  } | null;
   onClose: () => void;
+  onSave: (id: string, newQuantite: number) => Promise<void> | void;
+  onDelete?: (id: string) => Promise<void> | void;
 }
 
-export default function EditQuantityModal({ visible, item, dateString, onClose }: Props) {
+export default function EditQuantityModal({ visible, item, onClose, onSave, onDelete }: Props) {
   const { theme } = useContext(ThemeContext);
-  const globalStyles = getGlobalStyles(theme);
+  const { showToast } = useToast();
 
-  const [quantiteG, setQuantiteG] = useState('');
-  const modifierMutation = useModifierConsommation();
+  const [quantite, setQuantite] = useState('100');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (item) {
-      setQuantiteG(String(item.quantite || 100));
+      setQuantite(String(item.quantite || 100));
     }
   }, [item]);
 
-  const handleValidate = () => {
-    if (!item || !quantiteG) return;
-    const nouvelleQuantite = parseFloat(quantiteG);
-    if (isNaN(nouvelleQuantite) || nouvelleQuantite <= 0) return;
+  if (!item) return null;
 
-    modifierMutation.mutate(
-      {
-        id: item.id,
-        date: dateString,
-        nouvelleQuantite,
-        ancienneQuantite: Number(item.quantite || 100),
-        calories: Number(item.calories || 0),
-        proteines: Number(item.proteines || 0),
-        glucides: Number(item.glucides || 0),
-        lipides: Number(item.lipides || 0),
-      },
-      {
-        onSuccess: () => {
-          onClose();
-        },
-      }
-    );
+  const handleValidate = async () => {
+    const newQty = parseFloat(quantite.replace(',', '.')) || 0;
+    if (newQty <= 0) {
+      showToast('La quantité doit être supérieure à 0.', 'info');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await onSave(item.id, newQty);
+      showToast('Quantité mise à jour !', 'success');
+      onClose();
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors de la modification.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  if (!item) return null;
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    setIsLoading(true);
+    try {
+      await onDelete(item.id);
+      showToast('Aliment retiré du journal', 'info');
+      onClose();
+    } catch (err: any) {
+      showToast(err.message || 'Erreur lors de la suppression.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="fade" transparent>
       <View style={styles.overlay}>
-        <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[globalStyles.sectionTitle, { marginBottom: 4 }]}>Modifier la quantité</Text>
-          <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 16 }}>{item.aliment_nom}</Text>
+        <View style={[styles.container, { backgroundColor: theme.card }]}>
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: theme.text }]}>Modifier la quantité</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close-circle" size={24} color={theme.textSecondary} />
+            </TouchableOpacity>
+          </View>
 
-          <Text style={[styles.label, { color: theme.text }]}>Nouvelle quantité (g)</Text>
+          <Text style={[styles.itemName, { color: theme.text }]}>{item.aliment_nom}</Text>
+
+          <Text style={[styles.label, { color: theme.textSecondary }]}>Quantité en grammes (g)</Text>
           <TextInput
             style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
             keyboardType="numeric"
-            value={quantiteG}
-            onChangeText={setQuantiteG}
+            value={quantite}
+            onChangeText={setQuantite}
             autoFocus
           />
 
-          <View style={styles.actions}>
-            <TouchableOpacity style={[styles.btn, { backgroundColor: theme.border }]} onPress={onClose}>
-              <Text style={{ color: theme.text, fontWeight: 'bold' }}>Annuler</Text>
-            </TouchableOpacity>
+          <View style={styles.actionsRow}>
+            {onDelete && (
+              <TouchableOpacity
+                style={[styles.deleteBtn, { borderColor: theme.danger }]}
+                onPress={handleDelete}
+                disabled={isLoading}
+              >
+                <Ionicons name="trash-outline" size={18} color={theme.danger} />
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
-              style={[globalStyles.button, { marginTop: 0, flex: 1 }]}
+              style={[styles.saveBtn, { backgroundColor: theme.primary }]}
               onPress={handleValidate}
-              disabled={modifierMutation.isPending || !quantiteG}
+              disabled={isLoading}
             >
-              {modifierMutation.isPending ? (
+              {isLoading ? (
                 <ActivityIndicator color="#FFF" size="small" />
               ) : (
-                <Text style={globalStyles.buttonText}>Valider</Text>
+                <Text style={styles.saveBtnText}>Enregistrer</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -92,37 +127,63 @@ export default function EditQuantityModal({ visible, item, dateString, onClose }
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
-  modalContent: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 20,
+  container: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 18,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  itemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 14,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 10,
     fontSize: 16,
     fontWeight: 'bold',
     marginBottom: 16,
   },
-  actions: {
+  actionsRow: {
     flexDirection: 'row',
     gap: 10,
   },
-  btn: {
+  deleteBtn: {
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  saveBtn: {
+    flex: 1,
     paddingVertical: 12,
-    paddingHorizontal: 16,
     borderRadius: 10,
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  saveBtnText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });

@@ -8,11 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Image,
-  Alert,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeContext } from '../context/ThemeContext';
+import { useToast } from '../context/ToastContext';
 import { getGlobalStyles } from '../styles/globalStyles';
 import { useProfile } from '../hooks/useProfile';
 import { ProfileData, calculerObjectifs } from '../utils/bmr';
@@ -28,6 +27,7 @@ const ACTIVITES = [
 
 export default function ProfileScreen() {
   const { theme, isDarkMode, toggleTheme } = useContext(ThemeContext);
+  const { showToast } = useToast();
   const globalStyles = getGlobalStyles(theme);
 
   const { profile, updateProfile, isUpdating } = useProfile();
@@ -64,11 +64,9 @@ export default function ProfileScreen() {
   const handleSave = async () => {
     try {
       await updateProfile(currentParams);
-      const msg = 'Profil et objectifs mis à jour !';
-      Platform.OS === 'web' ? alert(msg) : Alert.alert('Succès', msg);
+      showToast('Profil et objectifs mis à jour !', 'success');
     } catch (err: any) {
-      const msg = err.message || 'Erreur lors de la sauvegarde';
-      Platform.OS === 'web' ? alert(msg) : Alert.alert('Erreur', msg);
+      showToast(err.message || 'Erreur lors de la sauvegarde.', 'error');
     }
   };
 
@@ -213,7 +211,7 @@ export default function ProfileScreen() {
           })}
         </View>
 
-        {/* Résultat calculé / Jauges Figma */}
+        {/* Résultat calculé */}
         <View style={[styles.targetSummary, { backgroundColor: theme.background, borderColor: theme.border }]}>
           <View style={styles.rowBetween}>
             <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>Cible Calorique</Text>
@@ -224,7 +222,6 @@ export default function ProfileScreen() {
 
           {/* Barres des Macros */}
           <View style={{ marginTop: 14, gap: 10 }}>
-            {/* Protéines */}
             <View>
               <View style={styles.rowBetween}>
                 <Text style={{ fontSize: 12, color: theme.textSecondary }}>Protéines (25%)</Text>
@@ -235,7 +232,6 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* Glucides */}
             <View>
               <View style={styles.rowBetween}>
                 <Text style={{ fontSize: 12, color: theme.textSecondary }}>Glucides (45%)</Text>
@@ -246,7 +242,6 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* Lipides */}
             <View>
               <View style={styles.rowBetween}>
                 <Text style={{ fontSize: 12, color: theme.textSecondary }}>Lipides (30%)</Text>

@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { supabase } from './src/services/supabase';
 import { ThemeProvider, ThemeContext } from './src/context/ThemeContext';
+import { ToastProvider } from './src/context/ToastContext';
 
 import HomeScreen from './src/screens/HomeScreen';
 import MealsScreen from './src/screens/MealsScreen';
@@ -94,9 +95,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <NavigationContainer>
-          {session && session.user ? <AppTabs /> : <AuthScreen />}
-        </NavigationContainer>
+        <ToastProvider>
+          <NavigationContainer>
+            {session && session.user ? <AppTabs /> : <AuthScreen />}
+          </NavigationContainer>
+        </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );
